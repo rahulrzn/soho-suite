@@ -8,7 +8,21 @@
 # COMMAND ----------
 
 # DBTITLE 1,Run Bronze Ingestion
-# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/data-engineering/bronze/01_bronze_ingestion
+# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/bronze/01_data_ingestion
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Silver Schema
+# MAGIC %md
+# MAGIC
+# MAGIC ## **Create Silver Schema**
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Silver Schema
+silver_schema = "olist_data.silver"
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS {silver_schema}")
+print(f"Schema '{silver_schema}' ready.")
 
 # COMMAND ----------
 
@@ -53,24 +67,6 @@ orders = orders.withColumn(
 
 # COMMAND ----------
 
-# DBTITLE 1,Verify Products Nulls (Kept as NULL)
-# Products: keep numeric nulls as NULL — filling with 0 would change meaning for dimensions/weight
-# Only product_category_name was imputed with "unknown" (handled in earlier cell)
-
-print("Products remaining nulls (numeric fields kept as NULL):")
-products.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in products.columns]).show(truncate=False)
-
-# COMMAND ----------
-
-# DBTITLE 1,Verify Review Nulls (Kept as NULL)
-# Order reviews: keep null comment fields as NULL — empty strings would conflate "no comment" with "blank comment"
-# Only review_sentiment was added (handled in later cell)
-
-print("Order reviews remaining nulls (comment fields kept as NULL):")
-order_reviews.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in order_reviews.columns]).show(truncate=False)
-
-# COMMAND ----------
-
 # DBTITLE 1,Add Order Date Missing Flags
 # Orders: keep remaining date nulls as-is (previous coalesce with None was a no-op)
 orders = orders.withColumn(
@@ -79,8 +75,60 @@ orders = orders.withColumn(
     "carrier_date_missing_flag", F.when(F.col("order_delivered_carrier_date").isNull(), 1).otherwise(0)
 )
 
-print("Orders remaining nulls (dates kept as NULL, flags added):")
-orders.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in orders.columns]).show(truncate=False)
+
+# COMMAND ----------
+
+# DBTITLE 1,Order Derived Columns
+# MAGIC %md
+# MAGIC ## **Order Derived Columns**
+# MAGIC
+# MAGIC Add analytical columns to `orders` for downstream reporting:
+# MAGIC
+# MAGIC | Column | Source | Purpose |
+# MAGIC | --- | --- | --- |
+# MAGIC | `purchase_year_month` | `order_purchase_timestamp` | Monthly analysis |
+# MAGIC | `delivery_days` | `order_delivered_customer_date` − `order_purchase_timestamp` | Average delivery time |
+# MAGIC | `delivery_delay_days` | `order_delivered_customer_date` − `order_estimated_delivery_date` | How many days late/early |
+# MAGIC | `is_late_delivery` | `delivery_delay_days > 0` | Late delivery rate |
+
+# COMMAND ----------
+
+# DBTITLE 1,Add Order Derived Columns
+# purchase_year_month — for monthly trend analysis
+orders = orders.withColumn(
+    "purchase_year_month",
+    F.date_format(F.col("order_purchase_timestamp"), "yyyy-MM")
+)
+
+# delivery_days — actual delivery time in days (purchase → customer delivery)
+orders = orders.withColumn(
+    "delivery_days",
+    F.datediff(F.col("order_delivered_customer_date"), F.col("order_purchase_timestamp"))
+)
+
+# delivery_delay_days — positive = late, negative = early, 0 = on time
+orders = orders.withColumn(
+    "delivery_delay_days",
+    F.datediff(F.col("order_delivered_customer_date"), F.col("order_estimated_delivery_date"))
+)
+
+# is_late_delivery — 1 if delivered after estimated date, 0 otherwise
+orders = orders.withColumn(
+    "is_late_delivery",
+    F.when(F.col("delivery_delay_days") > 0, 1).otherwise(0)
+)
+
+display(
+    orders
+    .select(
+        "order_id",
+        "purchase_year_month",
+        "delivery_days",
+        "delivery_delay_days",
+        "is_late_delivery",
+    )
+    .limit(10)
+)
 
 # COMMAND ----------
 
@@ -118,9 +166,6 @@ display(
 
 # DBTITLE 1,Write to Delta Tables
 # Write all cleaned DataFrames to Delta tables in olist_data.silver schema
-silver_schema = "olist_data.silver"
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {silver_schema}")
-
 tables = [
     ("customers", customer),
     ("geolocation", geolocation),
@@ -146,3 +191,39 @@ for table_name, df in tables:
     print(f"  {df.count()} rows written")
 
 print("All tables written successfully.")
+
+# COMMAND ----------
+
+# DBTITLE 1,Post-Silver Validation
+# MAGIC %md
+# MAGIC
+# MAGIC ## **Post-Silver Validation**
+# MAGIC
+# MAGIC Verify transformations persisted correctly by reading from `olist_data.silver` Delta tables.
+
+# COMMAND ----------
+
+# DBTITLE 1,Verify Products Nulls (from Silver)
+# Products: keep numeric nulls as NULL — filling with 0 would change meaning for dimensions/weight
+# Only product_category_name was imputed with "unknown" (handled in earlier cell)
+
+print("Products remaining nulls (numeric fields kept as NULL):")
+products_silver = spark.table(f"{silver_schema}.products")
+products_silver.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in products_silver.columns]).show(truncate=False)
+
+# COMMAND ----------
+
+# DBTITLE 1,Verify Review Nulls (from Silver)
+# Order reviews: keep null comment fields as NULL — empty strings would conflate "no comment" with "blank comment"
+# Only review_sentiment was added (handled in earlier cell)
+
+print("Order reviews remaining nulls (comment fields kept as NULL):")
+reviews_silver = spark.table(f"{silver_schema}.order_reviews")
+reviews_silver.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in reviews_silver.columns]).show(truncate=False)
+
+# COMMAND ----------
+
+# DBTITLE 1,Verify Orders Nulls (from Silver)
+print("Orders remaining nulls (dates kept as NULL, flags added):")
+orders_silver = spark.table(f"{silver_schema}.orders")
+orders_silver.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in orders_silver.columns]).show(truncate=False)

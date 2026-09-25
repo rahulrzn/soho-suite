@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # DBTITLE 1,Bronze Ingestion
 # MAGIC %md
 # MAGIC # Bronze Ingestion

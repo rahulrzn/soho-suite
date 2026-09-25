@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # DBTITLE 1,Data Quality Validation
 # MAGIC %md
 # MAGIC # Data Quality Validation
@@ -7,14 +11,14 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Run Bronze Ingestion
-# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/data-engineering/bronze/01_bronze_ingestion
-
-# COMMAND ----------
-
 # DBTITLE 1,Checking Missing Values
 # MAGIC %md
 # MAGIC ## **Checking Missing Values**
+
+# COMMAND ----------
+
+# DBTITLE 1,Run Bronze Ingestion
+# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/bronze/01_data_ingestion
 
 # COMMAND ----------
 
@@ -31,9 +35,10 @@ for df, name in [
     (sellers, "Sellers"),
 ]:
     print(f"{name}:")
-    null_counts = df.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in df.columns])
+    cols = df.columns
+    null_counts = df.agg(*[F.sum(F.col(c).isNull().cast("int")).alias(c) for c in cols])
     row = null_counts.collect()[0]
-    for c in df.columns:
+    for c in cols:
         print(f"  {c}: {row[c]}")
     print()
 

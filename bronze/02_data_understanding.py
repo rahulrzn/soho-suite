@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # DBTITLE 1,Data Understanding
 # MAGIC %md
 # MAGIC # Data Understanding
@@ -8,7 +12,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Run Bronze Ingestion
-# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/data-engineering/bronze/01_bronze_ingestion
+# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/bronze/01_data_ingestion
 
 # COMMAND ----------
 
