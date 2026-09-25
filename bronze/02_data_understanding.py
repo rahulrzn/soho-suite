@@ -11,8 +11,22 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Run Bronze Ingestion
-# MAGIC %run /Users/rahulrrreji@gmail.com/soho-suite/bronze/01_data_ingestion
+# DBTITLE 1,Read from Bronze Delta Tables
+from pyspark.sql import functions as F
+
+# Read from Bronze Delta tables (medallion: validation reads from persisted Bronze)
+bronze_schema = "olist_data.bronze"
+customer = spark.table(f"{bronze_schema}.customers")
+geolocation = spark.table(f"{bronze_schema}.geolocation")
+order_items = spark.table(f"{bronze_schema}.order_items")
+order_payments = spark.table(f"{bronze_schema}.order_payments")
+order_reviews = spark.table(f"{bronze_schema}.order_reviews")
+orders = spark.table(f"{bronze_schema}.orders")
+products = spark.table(f"{bronze_schema}.products")
+product_category = spark.table(f"{bronze_schema}.product_category")
+sellers = spark.table(f"{bronze_schema}.sellers")
+
+print("Loaded all tables from olist_data.bronze.*")
 
 # COMMAND ----------
 
