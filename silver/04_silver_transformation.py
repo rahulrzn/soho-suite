@@ -89,7 +89,7 @@ orders = orders.withColumn(
 # MAGIC | `purchase_year_month` | `order_purchase_timestamp` | Monthly analysis |
 # MAGIC | `delivery_days` | `order_delivered_customer_date` − `order_purchase_timestamp` | Average delivery time |
 # MAGIC | `delivery_delay_days` | `order_delivered_customer_date` − `order_estimated_delivery_date` | How many days late/early |
-# MAGIC | `is_late_delivery` | `delivery_delay_days > 0` | Late delivery rate |
+# MAGIC | `is_late_delivery` | `delivery_delay_days > 0` | 1=late, 0=on time, NULL=date unavailable |
 
 # COMMAND ----------
 
@@ -112,10 +112,12 @@ orders = orders.withColumn(
     F.datediff(F.col("order_delivered_customer_date"), F.col("order_estimated_delivery_date"))
 )
 
-# is_late_delivery — 1 if delivered after estimated date, 0 otherwise
+# is_late_delivery — 1 if delivered late, 0 if on time/early, NULL if delivery date unavailable
 orders = orders.withColumn(
     "is_late_delivery",
-    F.when(F.col("delivery_delay_days") > 0, 1).otherwise(0)
+    F.when(F.col("delivery_delay_days").isNull(), None)
+    .when(F.col("delivery_delay_days") > 0, 1)
+    .otherwise(0)
 )
 
 display(

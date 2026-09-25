@@ -86,11 +86,13 @@ display(sellers.describe())
 # COMMAND ----------
 
 # DBTITLE 1,Distinct Product Categories
+print(f"Distinct product categories: {products.select('product_category_name').distinct().count()}")
 products.select("product_category_name").distinct().show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Distinct Payment Types
+print(f"Distinct Payment Types Count: {order_payments.select('payment_type').distinct().count()}")
 order_payments.select("payment_type").distinct().show()
 
 # COMMAND ----------

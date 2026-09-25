@@ -392,7 +392,7 @@ comparison = (
     .join(payment_totals, on="order_id", how="inner")
     .withColumn(
         "match",
-        (F.abs(F.col("items_total") - F.col("payments_total")) < 1).cast("int")
+        (F.abs(F.col("items_total") - F.col("payments_total")) < 0.01).cast("int")
     )
 )
 
@@ -404,7 +404,7 @@ mismatch_count = comparison.filter(F.col("match") == 0).count()
 total_count = comparison.count()
 
 print(f"\nTotal orders compared: {total_count}")
-print(f"Matching (within $1.00): {match_count} ({match_count / total_count * 100:.2f}%)")
+print(f"Matching (within $0.01): {match_count} ({match_count / total_count * 100:.2f}%)")
 print(f"Mismatching:{mismatch_count} ({mismatch_count / total_count * 100:.2f}%)")
 
 print("\nSample mismatches:")
@@ -412,7 +412,7 @@ display(
     comparison
     .filter(F.col("match") == 0)
     .withColumn("difference", F.col("items_total") - F.col("payments_total"))
-    .orderBy(F.abs(F.col("difference")))
+    .orderBy(F.abs(F.col("difference")).desc())
     .limit(20)
 )
 
