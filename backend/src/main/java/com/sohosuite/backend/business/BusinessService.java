@@ -1,9 +1,9 @@
 package com.sohosuite.backend.business;
 
-import org.springframework.stereotype.Service;
-
 import java.util.List;
-import java.util.Optional;
+
+import com.sohosuite.backend.exception.BusinessNotFoundException;
+import org.springframework.stereotype.Service;
 
 @Service
 public class BusinessService {
@@ -22,11 +22,30 @@ public class BusinessService {
         return businessRepository.findAll();
     }
 
-    public Optional<Business> getBusinessById(Long id) {
-        return businessRepository.findById(id);
+    public Business getBusinessById(Long id) {
+        return businessRepository.findById(id)
+                .orElseThrow(() -> new BusinessNotFoundException("Business not found"));
     }
 
     public void deleteBusiness(Long id) {
-        businessRepository.deleteById(id);
+        Business existingBusiness = businessRepository.findById(id)
+                .orElseThrow(() -> new BusinessNotFoundException("Business not found"));
+
+        businessRepository.delete(existingBusiness);
+    }
+
+    public Business updateBusiness(Long id, Business updatedBusiness) {
+        Business existingBusiness = businessRepository.findById(id)
+                .orElseThrow(() -> new BusinessNotFoundException("Business not found"));
+
+        existingBusiness.setCompany(updatedBusiness.getCompany());
+        existingBusiness.setCountry(updatedBusiness.getCountry());
+        existingBusiness.setState(updatedBusiness.getState());
+        existingBusiness.setCity(updatedBusiness.getCity());
+        existingBusiness.setPincode(updatedBusiness.getPincode());
+        existingBusiness.setBusinessEmail(updatedBusiness.getBusinessEmail());
+        existingBusiness.setDepartment(updatedBusiness.getDepartment());
+
+        return businessRepository.save(existingBusiness);
     }
 }

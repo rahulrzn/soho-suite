@@ -1,0 +1,46 @@
+# Local IDE settings
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+
+# Java / Maven build output
+target/
+*.class
+
+# Node dependencies and generated frontend output
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+.next/
+*.tsbuildinfo
+
+# Local environment and credentials (keep example templates)
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+credentials/
+*firebase-adminsdk*.json
+firebase-admin.json
+service-account*.json
+serviceAccountKey.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
