@@ -1,11 +1,16 @@
 # SOHO Suite Firebase authentication refactor
 
+> Historical implementation report. Its copied setup and database notes may not match the current
+> Flyway migration sequence. Use [firebase-authentication.md](firebase-authentication.md),
+> [database-migrations.md](database-migrations.md), and the current source files for active setup
+> and schema instructions.
+
 ## A. Files deleted
 None in this step. PasswordConfig, PasswordResetRequest, PasswordResetToken and BCrypt were already removed in the preceding refactor.
 
 ## B. Files created
 - config/FirebaseConfig.java
-- config/UserWebConfig.java
+- config/WebMvcConfig.java
 - security/FirebaseTokenVerifier.java
 - security/FirebaseAuthenticationInterceptor.java
 - security/VerifiedFirebaseIdentity.java
@@ -19,17 +24,22 @@ None in this step. PasswordConfig, PasswordResetRequest, PasswordResetToken and 
 - exception/GlobalExceptionHandler.java
 - backend/pom.xml
 - src/test/java/com/sohosuite/backend/user/UserProfileTests.java
-UpdateProfileRequest.java is retained unchanged. Business source files were not edited in this step.
+UpdateUserProfileRequest.java is retained unchanged. Business source files were not edited in this step.
 
 ## D. Final User.java
 
 ```java
 package com.sohosuite.backend.user;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.sohosuite.backend.business.BusinessRole;
+
 import com.sohosuite.backend.business.Business;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -75,11 +85,17 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    private String phone;
+    @JsonProperty("phone")
+    @Column(name = "phone")
+    private String phoneNumber;
 
     @ManyToOne
     @JoinColumn(name = "business_id")
     private Business business;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "business_role", length = 20)
+    private BusinessRole businessRole;
 }
 ```
 
@@ -89,10 +105,25 @@ public class User {
 package com.sohosuite.backend.user;
 
 import java.util.Optional;
+import java.util.List;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserRepository extends JpaRepository<User, Long> {
+
+    List<User> findAllByBusinessId(Long businessId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.firebaseUid = :firebaseUid")
+    Optional<User> findForUpdateByFirebaseUid(@Param("firebaseUid") String firebaseUid);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> findForUpdateById(@Param("id") Long id);
 
     Optional<User> findByEmail(String email);
 
@@ -125,7 +156,7 @@ import com.sohosuite.backend.exception.UserNotFoundException;
 import com.sohosuite.backend.exception.UsernameAlreadyExistsException;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
 import com.sohosuite.backend.user.dto.CreateUserProfileRequest;
-import com.sohosuite.backend.user.dto.UpdateProfileRequest;
+import com.sohosuite.backend.user.dto.UpdateUserProfileRequest;
 
 @Service
 public class UserService {
@@ -155,7 +186,7 @@ public class UserService {
         user.setEmail(email);
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
-        user.setPhone(request.getPhone());
+        user.setPhoneNumber(request.getPhoneNumber());
 
         try {
             return userRepository.saveAndFlush(user);
@@ -176,7 +207,7 @@ public class UserService {
                         new UserNotFoundException("User not found"));
     }
 
-    public User updateProfile(String firebaseUid, UpdateProfileRequest request) {
+    public User updateProfile(String firebaseUid, UpdateUserProfileRequest request) {
         User existingUser = getCurrentUser(firebaseUid);
 
         if (request.getFirstName() != null) {
@@ -187,8 +218,8 @@ public class UserService {
             existingUser.setLastName(request.getLastName());
         }
 
-        if (request.getPhone() != null) {
-            existingUser.setPhone(request.getPhone());
+        if (request.getPhoneNumber() != null) {
+            existingUser.setPhoneNumber(request.getPhoneNumber());
         }
 
         return userRepository.save(existingUser);
@@ -218,7 +249,7 @@ import java.util.Map;
 
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
 import com.sohosuite.backend.user.dto.CreateUserProfileRequest;
-import com.sohosuite.backend.user.dto.UpdateProfileRequest;
+import com.sohosuite.backend.user.dto.UpdateUserProfileRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -258,7 +289,7 @@ public class UserController {
     @PatchMapping("/me/profile")
     public User updateProfile(
             @RequestAttribute("firebaseIdentity") VerifiedFirebaseIdentity identity,
-            @Valid @RequestBody UpdateProfileRequest request) {
+            @Valid @RequestBody UpdateUserProfileRequest request) {
 
         return userService.updateProfile(identity.uid(), request);
     }
@@ -279,6 +310,7 @@ public class UserController {
 ```java
 package com.sohosuite.backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -301,15 +333,17 @@ public class CreateUserProfileRequest {
     private String lastName;
 
     @Pattern(regexp = "(?s).*\\S.*", message = "Phone number must not be blank")
-    private String phone;
+    @JsonProperty("phone")
+    private String phoneNumber;
 }
 ```
 
-## H. UpdateProfileRequest.java
+## H. UpdateUserProfileRequest.java
 
 ```java
 package com.sohosuite.backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Pattern;
 
 import lombok.Getter;
@@ -317,7 +351,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class UpdateProfileRequest {
+public class UpdateUserProfileRequest {
 
     @Pattern(regexp = "(?s).*\\S.*", message = "First name must not be blank")
     private String firstName;
@@ -326,7 +360,8 @@ public class UpdateProfileRequest {
     private String lastName;
 
     @Pattern(regexp = "(?s).*\\S.*", message = "Phone number must not be blank")
-    private String phone;
+    @JsonProperty("phone")
+    private String phoneNumber;
 }
 ```
 
@@ -386,7 +421,7 @@ public class FirebaseConfig {
 }
 ```
 
-## I. UserWebConfig.java
+## I. WebMvcConfig.java
 
 ```java
 package com.sohosuite.backend.config;
@@ -397,17 +432,19 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-public class UserWebConfig implements WebMvcConfigurer {
+public class WebMvcConfig implements WebMvcConfigurer {
 
-    private final FirebaseAuthenticationInterceptor interceptor;
+    private final FirebaseAuthenticationInterceptor authenticationInterceptor;
 
-    public UserWebConfig(FirebaseAuthenticationInterceptor interceptor) {
-        this.interceptor = interceptor;
+    public WebMvcConfig(FirebaseAuthenticationInterceptor authenticationInterceptor) {
+        this.authenticationInterceptor = authenticationInterceptor;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(interceptor).addPathPatterns("/api/users", "/api/users/**");
+        registry.addInterceptor(authenticationInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/public/**");
     }
 }
 ```
@@ -447,7 +484,8 @@ public class FirebaseTokenVerifier {
             if (!StringUtils.hasText(verified.getUid())) {
                 throw new InvalidFirebaseTokenException();
             }
-            return new VerifiedFirebaseIdentity(verified.getUid(), verified.getEmail());
+            return new VerifiedFirebaseIdentity(
+                    verified.getUid(), verified.getEmail(), verified.isEmailVerified());
         } catch (FirebaseAuthException | IllegalArgumentException exception) {
             // Never include the token or Firebase exception details in logs or responses.
             throw new InvalidFirebaseTokenException();
@@ -490,7 +528,10 @@ public class FirebaseAuthenticationInterceptor implements HandlerInterceptor {
 ```java
 package com.sohosuite.backend.security;
 
-public record VerifiedFirebaseIdentity(String uid, String email) {
+public record VerifiedFirebaseIdentity(
+        String uid,
+        String email,
+        boolean emailVerified) {
 }
 ```
 
@@ -547,6 +588,18 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(BusinessAccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleBusinessAccessDenied(BusinessAccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                "code", "FORBIDDEN", "message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(MembershipConflictException.class)
+    public ResponseEntity<Map<String, String>> handleMembershipConflict(MembershipConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "code", "MEMBERSHIP_CONFLICT", "message", exception.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(
             MethodArgumentNotValidException exception) {
@@ -555,11 +608,24 @@ public class GlobalExceptionHandler {
 
         exception.getBindingResult()
                 .getFieldErrors()
-                .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+                .forEach(error -> errors.putIfAbsent(requestFieldName(exception.getBindingResult().getTarget(), error.getField()), error.getDefaultMessage()));
 
         return ResponseEntity.badRequest().body(Map.of(
                 "code", "VALIDATION_ERROR",
                 "errors", errors));
+    }
+
+    private String requestFieldName(Object target, String fieldName) {
+        if (target == null) {
+            return fieldName;
+        }
+        try {
+            com.fasterxml.jackson.annotation.JsonProperty property = target.getClass()
+                    .getDeclaredField(fieldName).getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
+            return property != null && !property.value().isEmpty() ? property.value() : fieldName;
+        } catch (NoSuchFieldException exception) {
+            return fieldName;
+        }
     }
 
     @ExceptionHandler(BusinessNotFoundException.class)
@@ -713,7 +779,10 @@ POST accepts only these profile fields:
 
 Phone may be omitted. Username is 3â€“30 ASCII letters, digits or underscores, and is stored lowercase.
 Email is copied from the verified token and stored lowercase. The token's UID is the identity key.
-UID, username and email have database uniqueness constraints. New profiles have no business association.
+UID and username have unique constraints in V1. V4 adds a case-insensitive unique index on email,
+matching lowercase normalization in the service. The legacy manual SQL script is separate and
+incompatible with the Flyway migration path; do not run it on a Flyway-managed database. New profiles
+have no business association.
 Client-supplied identity fields are never used; the creation DTO does not contain them.
 
 PATCH accepts only firstName, lastName and phone. Missing/null fields remain unchanged.
@@ -746,12 +815,12 @@ id, company, country, department, phone_number, email, first_name, last_name, pa
 password and phone_number were NOT NULL; firebase_uid and username were absent.
 No password_reset_tokens table was present. No data or schema changes were executed.
 
-Hibernate ddl-auto=update will not reliably remove obsolete columns or relax the old phone constraint.
-Review and run firebase-development-schema.sql separately before starting the updated application.
-It locks and checks that users is still empty, preserves the users table and its business relationship,
-removes obsolete columns, adds identity fields and unique indexes, and makes phone optional.
-It aborts if any users now exist. Do not switch to ddl-auto=create or recreate the database.
-For populated environments, first plan UID/username backfill and duplicate resolution; do not run the empty-table script.
+This is a historical read-only observation, not a statement about the current database. The manual
+`firebase-development-schema.sql` is incompatible with the current Flyway V1/V2 sequence: it removes
+columns V2 expects and adds an email index absent from V1. Do not run it on a Flyway-managed database
+or baseline a database after running it until one migration path has been designed and reviewed. Use
+the current Firebase and database migration guides for active setup. Never switch to
+`ddl-auto=create` or recreate a database to bypass schema reconciliation.
 
 ## Postman test plan
 
@@ -799,7 +868,6 @@ References:
 - https://firebase.google.com/docs/admin/setup
 - https://firebase.google.com/docs/auth/admin/verify-id-tokens
 - https://firebase.google.com/docs/auth/web/account-linking
-
 
 ## Verification result (2026-10-06)
 

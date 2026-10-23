@@ -5,17 +5,26 @@ import java.util.Optional;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
+import com.sohosuite.backend.business.entity.Business;
+import com.sohosuite.backend.business.enums.BusinessRole;
 import com.sohosuite.backend.exception.GlobalExceptionHandler;
 import com.sohosuite.backend.exception.EmailAlreadyExistsException;
 import com.sohosuite.backend.exception.UsernameAlreadyExistsException;
-import com.sohosuite.backend.security.FirebaseAuthenticationInterceptor;
+import com.sohosuite.backend.security.FirebaseBearerTokenFilter;
 import com.sohosuite.backend.security.FirebaseTokenVerifier;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
+import com.sohosuite.backend.user.controller.UserController;
 import com.sohosuite.backend.user.dto.CreateUserProfileRequest;
+import com.sohosuite.backend.user.entity.User;
+import com.sohosuite.backend.user.repository.UserRepository;
+import com.sohosuite.backend.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -42,26 +51,42 @@ class UserProfileTests {
         FirebaseToken token = mock(FirebaseToken.class);
         when(token.getUid()).thenReturn("verified-uid");
         when(token.getEmail()).thenReturn("asha@example.com");
+        when(token.isEmailVerified()).thenReturn(true);
         when(auth.verifyIdToken("valid-token", true)).thenReturn(token);
         service = new UserService(repository);
         mvc = MockMvcBuilders.standaloneSetup(new UserController(service))
-                .addInterceptors(new FirebaseAuthenticationInterceptor(new FirebaseTokenVerifier(auth)))
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                .addFilters(new FirebaseBearerTokenFilter(new FirebaseTokenVerifier(auth)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
         when(repository.saveAndFlush(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
-    @Test
-    void createsProfileUsingVerifiedIdentityAndOptionalPhone() throws Exception {
-        mvc.perform(post("/api/users/profile").header("Authorization", "Bearer valid-token")
-                        .contentType(MediaType.APPLICATION_JSON).content(PROFILE))
-                .andExpect(status().isOk())
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void profileCreationRequiresVerifiedEmail(boolean emailVerified) throws Exception {
+        FirebaseToken token = mock(FirebaseToken.class);
+        when(token.getUid()).thenReturn("verified-uid");
+        when(token.getEmail()).thenReturn("asha@example.com");
+        when(token.isEmailVerified()).thenReturn(emailVerified);
+        when(auth.verifyIdToken("valid-token", true)).thenReturn(token);
+
+        var result = mvc.perform(post("/api/users/profile").header("Authorization", "Bearer valid-token")
+                        .contentType(MediaType.APPLICATION_JSON).content(PROFILE));
+        if (!emailVerified) {
+            result.andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));
+            verify(repository, never()).saveAndFlush(any());
+            return;
+        }
+        result.andExpect(status().isOk())
                 .andExpect(jsonPath("$.firebaseUid").value("verified-uid"))
                 .andExpect(jsonPath("$.email").value("asha@example.com"))
                 .andExpect(jsonPath("$.username").value("asha_01"))
                 .andExpect(jsonPath("$.phone").isEmpty())
                 .andExpect(jsonPath("$.business").isEmpty())
+                .andExpect(jsonPath("$.phoneNumber").doesNotExist())
                 .andExpect(jsonPath("$.password").doesNotExist());
         verify(auth).verifyIdToken("valid-token", true);
     }
@@ -97,6 +122,18 @@ class UserProfileTests {
         verifyNoInteractions(repository);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"expired-token", "revoked-token"})
+    void rejectsExpiredAndRevokedTokensUsingFirebaseRevocationCheck(String token) throws Exception {
+        when(auth.verifyIdToken(token, true)).thenThrow(mock(FirebaseAuthException.class));
+
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+        verify(auth).verifyIdToken(token, true);
+        verifyNoInteractions(repository);
+    }
+
     @Test
     void sameUidFromTwoProviderTokensReturnsSameLocalProfile() throws Exception {
         User existing = existingUser();
@@ -104,6 +141,7 @@ class UserProfileTests {
         FirebaseToken googleToken = mock(FirebaseToken.class);
         when(googleToken.getUid()).thenReturn("verified-uid");
         when(googleToken.getEmail()).thenReturn("asha@example.com");
+        when(googleToken.isEmailVerified()).thenReturn(true);
         when(auth.verifyIdToken("google-token", true)).thenReturn(googleToken);
 
         for (String token : new String[] {"valid-token", "google-token"}) {
@@ -128,9 +166,52 @@ class UserProfileTests {
     }
 
     @Test
+    void profileResponseMapsBusinessToResponseDto() throws Exception {
+        User existing = existingUser();
+        Business business = new Business();
+        business.setId(42L);
+        business.setBusinessCode("BIZ-00000042");
+        business.setCompanyName("Asha Trading");
+        business.setTradingName("Asha Trading");
+        existing.setBusiness(business);
+        existing.setBusinessRole(BusinessRole.OWNER);
+        when(repository.findByFirebaseUid("verified-uid")).thenReturn(Optional.of(existing));
+
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer valid-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.business.id").value(42))
+                .andExpect(jsonPath("$.business.company").value("Asha Trading"))
+                .andExpect(jsonPath("$.business.tradingName").value("Asha Trading"))
+                .andExpect(jsonPath("$.business.locations").isArray())
+                .andExpect(jsonPath("$.businessRole").value("OWNER"))
+                .andExpect(jsonPath("$.business.userList").doesNotExist());
+    }
+
+    @Test
     void missingLocalProfileRequiresCompletion() throws Exception {
         mvc.perform(get("/api/users/me").header("Authorization", "Bearer valid-token"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    void unverifiedIdentityCanOnlyUseVerificationSupportLookupAndUnknownRoutesStayProtected() throws Exception {
+        FirebaseToken unverified = mock(FirebaseToken.class);
+        when(unverified.getUid()).thenReturn("verified-uid");
+        when(unverified.getEmail()).thenReturn("asha@example.com");
+        when(unverified.isEmailVerified()).thenReturn(false);
+        when(auth.verifyIdToken("unverified-token", true)).thenReturn(unverified);
+        when(repository.existsByUsername("asha_02")).thenReturn(false);
+
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer unverified-token"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+        mvc.perform(get("/api/users/check-username").header("Authorization", "Bearer unverified-token")
+                        .param("username", "asha_02"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.available").value(true));
+        mvc.perform(patch("/api/users/me/profile").header("Authorization", "Bearer unverified-token")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));
+        mvc.perform(get("/api/unknown").header("Authorization", "Bearer valid-token"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -196,7 +277,7 @@ class UserProfileTests {
                         .contentType(MediaType.APPLICATION_JSON).content(PROFILE))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("USERNAME_ALREADY_EXISTS"));
         when(repository.existsByUsername("asha_01")).thenReturn(false);
-        when(repository.existsByEmail("asha@example.com")).thenReturn(true);
+        when(repository.existsByEmailIgnoreCase("asha@example.com")).thenReturn(true);
         mvc.perform(post("/api/users/profile").header("Authorization", "Bearer valid-token")
                         .contentType(MediaType.APPLICATION_JSON).content(PROFILE))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
@@ -209,7 +290,7 @@ class UserProfileTests {
         when(repository.findByFirebaseUid("verified-uid"))
                 .thenReturn(Optional.empty()).thenReturn(Optional.of(winner));
         when(repository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("unique constraint"));
-        assertSame(winner, service.createProfile(identity(), profile()));
+        assertEquals(winner.getId(), service.createProfile(identity(), profile()).id());
     }
 
     @Test
@@ -218,7 +299,7 @@ class UserProfileTests {
         when(repository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("unique constraint"));
         assertThrows(UsernameAlreadyExistsException.class, () -> service.createProfile(identity(), profile()));
         when(repository.existsByUsername("asha_01")).thenReturn(false);
-        when(repository.existsByEmail("asha@example.com")).thenReturn(false, true);
+        when(repository.existsByEmailIgnoreCase("asha@example.com")).thenReturn(false, true);
         assertThrows(EmailAlreadyExistsException.class, () -> service.createProfile(identity(), profile()));
     }
 
@@ -245,7 +326,7 @@ class UserProfileTests {
     }
 
     private VerifiedFirebaseIdentity identity() {
-        return new VerifiedFirebaseIdentity("verified-uid", "asha@example.com");
+        return new VerifiedFirebaseIdentity("verified-uid", "asha@example.com", false);
     }
 
     private CreateUserProfileRequest profile() {

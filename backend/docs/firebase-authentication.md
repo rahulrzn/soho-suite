@@ -1,18 +1,37 @@
 # Firebase authentication and local profiles
 
 Firebase owns signup, login, credentials, email verification, password resets and provider linking.
-Spring verifies ID tokens and stores application profiles in PostgreSQL. No roles or business linking are added.
+Spring verifies ID tokens and stores application profiles in PostgreSQL. Business linking and roles
+are documented in [business-membership.md](business-membership.md).
 
 ## Configuration
 
 Enable Email/Password and Google providers in the Firebase project's Authentication console.
 Configure the frontend with that same project. Firebase Admin Java 9.11.0 is the only new direct dependency.
+For the complete per-terminal PowerShell startup command and database migration requirements, see
+[database-migrations.md](database-migrations.md). Java 25 and a running local PostgreSQL service are
+required for the documented local setup.
+
+The backend database username and password are read from `DB_USERNAME` and `DB_PASSWORD` in
+`application.properties`. For local PowerShell startup, set them in the shell before launching
+Spring Boot. The password is prompted securely and is not included in this documentation:
+
+```powershell
+$env:DB_USERNAME = 'postgres'
+$securePassword = Read-Host 'Enter your PostgreSQL password' -AsSecureString
+$env:DB_PASSWORD = [System.Net.NetworkCredential]::new('', $securePassword).Password
+Remove-Variable securePassword
+```
+
+These environment variables are inherited by processes started from this PowerShell session.
+Keep the shell open while running the backend. Clear the password from the session when finished with
+`Remove-Item Env:DB_PASSWORD`.
 
 For local PowerShell startup, keep the service-account file OUTSIDE this repository:
 
 ```powershell
 $env:FIREBASE_PROJECT_ID = 'your-firebase-project-id'
-$env:GOOGLE_APPLICATION_CREDENTIALS = 'C:\secrets\soho-firebase-admin.json'
+$env:GOOGLE_APPLICATION_CREDENTIALS = 'D:\firebase-keys\soho-suite.json'
 cd D:\Dev\programming\soho-suite\backend
 .\mvnw.cmd spring-boot:run
 ```
@@ -30,8 +49,9 @@ No real Firebase credentials or token were supplied for this implementation's te
 ## HTTP contract
 
 Every route below requires `Authorization: Bearer <Firebase ID token>`.
-The MVC interceptor verifies the token through Firebase Admin before the controller runs.
-`verifyIdToken(token, true)` also checks revocation and disabled users.
+The stateless Spring Security filter verifies the token through Firebase Admin before the controller runs.
+It installs the verified identity as the authenticated principal. `verifyIdToken(token, true)` also checks
+revocation and disabled users.
 No JWT decoding or cryptography is implemented locally.
 
 | Method | Route | Result |
@@ -42,8 +62,10 @@ No JWT decoding or cryptography is implemented locally.
 | GET | /api/users/check-username?username=asha_01 | 200 {"available":true/false} |
 
 The unrestricted user list and arbitrary-ID read/update endpoints were removed.
-Authentication here applies to `/api/users` routes only. Business endpoints are unchanged;
-ERP authorization is not implemented by this change.
+Every route requires a Firebase ID token, except HTTP OPTIONS CORS preflight requests. There are no
+public API routes. Business endpoints additionally enforce PostgreSQL membership and roles; see
+[business-membership.md](business-membership.md). See [security.md](security.md) for the email-verification
+and CORS policies.
 
 POST accepts only these profile fields:
 
@@ -53,7 +75,10 @@ POST accepts only these profile fields:
 
 Phone may be omitted. Username is 3–30 ASCII letters, digits or underscores, and is stored lowercase.
 Email is copied from the verified token and stored lowercase. The token's UID is the identity key.
-UID, username and email have database uniqueness constraints. New profiles have no business association.
+UID and username have unique constraints in V1. V4 adds a case-insensitive unique index on email,
+matching lowercase normalization in the service. The legacy manual development SQL is separate and
+incompatible with the Flyway migration path; do not run it on a Flyway-managed database. New profiles
+have no business association.
 Client-supplied identity fields are never used; the creation DTO does not contain them.
 
 PATCH accepts only firstName, lastName and phone. Missing/null fields remain unchanged.
@@ -86,12 +111,15 @@ id, company, country, department, phone_number, email, first_name, last_name, pa
 password and phone_number were NOT NULL; firebase_uid and username were absent.
 No password_reset_tokens table was present. No data or schema changes were executed.
 
-Hibernate ddl-auto=update will not reliably remove obsolete columns or relax the old phone constraint.
-Review and run firebase-development-schema.sql separately before starting the updated application.
-It locks and checks that users is still empty, preserves the users table and its business relationship,
-removes obsolete columns, adds identity fields and unique indexes, and makes phone optional.
-It aborts if any users now exist. Do not switch to ddl-auto=create or recreate the database.
-For populated environments, first plan UID/username backfill and duplicate resolution; do not run the empty-table script.
+This is a historical read-only schema observation, not a statement about the current database. The
+manual `firebase-development-schema.sql` changes the schema: it removes legacy columns, adds Firebase
+identity fields and indexes, and relaxes phone nullability. It is **not compatible with the current
+Flyway V1/V2 sequence**: it removes `phone_number` and `password`, which V2 expects, and adds an email
+unique index absent from V1. Do not run that script on a database managed by these Flyway migrations,
+or baseline a database after running it, until a single migration path has been designed and reviewed.
+If it has already been run, audit the live schema and reconcile migration history before starting the
+backend. Never switch to `ddl-auto=create` or recreate a database to bypass this mismatch. For
+populated environments, plan UID/username backfill and duplicate resolution explicitly.
 
 ## Postman test plan
 
@@ -131,7 +159,7 @@ Run from backend:
 .\mvnw.cmd "-Dtest=UserProfileTests,BusinessErrorHandlingTests" test
 ```
 
-Tests mock FirebaseAuth and the repository, exercising the real verifier/interceptor/controller/service/advice.
+Tests mock FirebaseAuth and the repository, exercising the verifier, bearer filter, controller, service, and advice.
 They verify delegation to Firebase Admin with revocation checks, identity boundaries, validation, conflicts,
 concurrent-insert recovery, and Business error regression behavior. They do not contact live Firebase or mutate PostgreSQL.
 

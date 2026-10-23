@@ -30,7 +30,8 @@ public class FirebaseTokenVerifier {
             if (!StringUtils.hasText(verified.getUid())) {
                 throw new InvalidFirebaseTokenException();
             }
-            return new VerifiedFirebaseIdentity(verified.getUid(), verified.getEmail());
+            return new VerifiedFirebaseIdentity(
+                    verified.getUid(), verified.getEmail(), verified.isEmailVerified());
         } catch (FirebaseAuthException | IllegalArgumentException exception) {
             // Never include the token or Firebase exception details in logs or responses.
             throw new InvalidFirebaseTokenException();

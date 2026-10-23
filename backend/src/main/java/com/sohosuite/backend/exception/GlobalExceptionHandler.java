@@ -16,11 +16,36 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(BusinessAccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleBusinessAccessDenied(BusinessAccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                "code", "FORBIDDEN", "message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(BusinessRequestException.class)
+    public ResponseEntity<Map<String, String>> handleBusinessRequest(BusinessRequestException exception) {
+        return ResponseEntity.badRequest().body(Map.of("code", "INVALID_BUSINESS_REQUEST", "message", exception.getMessage()));
+    }
+
+    @ExceptionHandler({BusinessConflictException.class, DataIntegrityViolationException.class})
+    public ResponseEntity<Map<String, String>> handleBusinessConflict(Exception exception) {
+        String message = exception instanceof BusinessConflictException
+                ? exception.getMessage() : "A business record conflicts with existing data";
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "BUSINESS_CONFLICT", "message", message));
+    }
+
+    @ExceptionHandler(MembershipConflictException.class)
+    public ResponseEntity<Map<String, String>> handleMembershipConflict(MembershipConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "code", "MEMBERSHIP_CONFLICT", "message", exception.getMessage()));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(
@@ -30,11 +55,24 @@ public class GlobalExceptionHandler {
 
         exception.getBindingResult()
                 .getFieldErrors()
-                .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+                .forEach(error -> errors.putIfAbsent(requestFieldName(exception.getBindingResult().getTarget(), error.getField()), error.getDefaultMessage()));
 
         return ResponseEntity.badRequest().body(Map.of(
                 "code", "VALIDATION_ERROR",
                 "errors", errors));
+    }
+
+    private String requestFieldName(Object target, String fieldName) {
+        if (target == null) {
+            return fieldName;
+        }
+        try {
+            com.fasterxml.jackson.annotation.JsonProperty property = target.getClass()
+                    .getDeclaredField(fieldName).getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
+            return property != null && !property.value().isEmpty() ? property.value() : fieldName;
+        } catch (NoSuchFieldException exception) {
+            return fieldName;
+        }
     }
 
     @ExceptionHandler(BusinessNotFoundException.class)

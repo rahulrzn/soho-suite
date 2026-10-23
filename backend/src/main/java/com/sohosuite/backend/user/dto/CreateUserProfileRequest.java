@@ -1,5 +1,6 @@
 package com.sohosuite.backend.user.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -22,5 +23,6 @@ public class CreateUserProfileRequest {
     private String lastName;
 
     @Pattern(regexp = "(?s).*\\S.*", message = "Phone number must not be blank")
-    private String phone;
+    @JsonProperty("phone")
+    private String phoneNumber;
 }

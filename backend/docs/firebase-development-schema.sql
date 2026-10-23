@@ -1,4 +1,7 @@
--- MANUAL ONLY: reviewed for the inspected empty development users table.
+-- LEGACY MANUAL SCRIPT: incompatible with the current Flyway V1/V2 migration sequence.
+-- Do not run this against a Flyway-managed database or before a Flyway baseline unless a reviewed
+-- migration plan explicitly accounts for its dropped columns, nullability changes, and added indexes.
+-- It was reviewed only for the inspected empty development users table.
 -- Back up the database first. Do not use this script to migrate populated users.
 -- Run with psql -v ON_ERROR_STOP=1 -f firebase-development-schema.sql
 BEGIN;
