@@ -27,15 +27,18 @@ public class BusinessService {
     private static final String LEGACY_LOCATION_NAME = "Registered address";
 
     private final BusinessRepository businessRepository;
+    private final BusinessMembershipRepository membershipRepository;
     private final UserRepository userRepository;
     private final BusinessLocationRepository locationRepository;
     private final BusinessTaxRegistrationRepository taxRepository;
     private final DepartmentRepository departmentRepository;
 
-    public BusinessService(BusinessRepository businessRepository, UserRepository userRepository,
+    public BusinessService(BusinessRepository businessRepository, BusinessMembershipRepository membershipRepository,
+            UserRepository userRepository,
             BusinessLocationRepository locationRepository, BusinessTaxRegistrationRepository taxRepository,
             DepartmentRepository departmentRepository) {
         this.businessRepository = businessRepository;
+        this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
         this.locationRepository = locationRepository;
         this.taxRepository = taxRepository;
@@ -46,17 +49,12 @@ public class BusinessService {
     public BusinessResponse createBusiness(String firebaseUid, BusinessRequest request) {
         User creator = userRepository.findForUpdateByFirebaseUid(firebaseUid)
                 .orElseThrow(() -> new UserNotFoundException("Complete your user profile first"));
-        if (creator.getBusiness() != null) {
-            throw new MembershipConflictException("User already belongs to a business");
-        }
-
         Business business = new Business();
         applyBusinessFields(business, request, true);
         business.setBusinessCode(formatBusinessCode(businessRepository.nextBusinessCodeSequenceValue()));
         Business saved = businessRepository.saveAndFlush(business);
-        creator.setBusiness(saved);
-        creator.setBusinessRole(BusinessRole.OWNER);
-        userRepository.save(creator);
+        createMembership(creator, saved, BusinessRole.OWNER);
+        if (creator.getBusiness() == null) setLegacyDefault(creator, saved, BusinessRole.OWNER);
 
         applyRelatedRecords(saved, request);
         syncLegacyAddress(saved, request, true);
@@ -66,9 +64,8 @@ public class BusinessService {
     @Transactional(readOnly = true)
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
     public List<BusinessResponse> getCurrentUserBusinesses(String firebaseUid) {
-        User user = getCurrentUser(firebaseUid);
-        if (user.getBusiness() == null || user.getBusinessRole() == null) return List.of();
-        return List.of(toResponse(user.getBusiness()));
+        return membershipRepository.findAllForFirebaseUser(firebaseUid).stream()
+                .map(membership -> toResponse(membership.getBusiness())).toList();
     }
 
     @Transactional(readOnly = true)
@@ -83,21 +80,22 @@ public class BusinessService {
     public void deleteBusiness(String firebaseUid, Long businessId) {
         Business business = lockBusiness(businessId);
         requireOwner(firebaseUid, businessId);
-        List<User> members = userRepository.findAllByBusinessId(businessId);
-        for (User member : members) {
-            member.setBusiness(null);
-            member.setBusinessRole(null);
+        List<BusinessMembership> memberships = membershipRepository.findAllForBusiness(businessId);
+        for (var membership : memberships) {
+            User member = membership.getUser();
+            if (member.getBusiness() != null && businessId.equals(member.getBusiness().getId())) {
+                setLegacyDefaultFromRemainingMembership(member, businessId);
+            }
         }
-        userRepository.saveAll(members);
-        userRepository.flush();
+        membershipRepository.deleteAll(memberships);
         businessRepository.delete(business);
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
     public BusinessResponse updateBusiness(String firebaseUid, Long businessId, BusinessRequest request) {
         Business business = lockBusiness(businessId);
-        User actor = requireMember(firebaseUid, businessId);
-        if (actor.getBusinessRole() == BusinessRole.VIEWER) throw new BusinessAccessDeniedException();
+        var actor = requireMember(firebaseUid, businessId);
+        if (actor.getRole() == BusinessRole.VIEWER) throw new BusinessAccessDeniedException();
 
         applyBusinessFields(business, request, false);
         Business saved = businessRepository.saveAndFlush(business);
@@ -110,7 +108,8 @@ public class BusinessService {
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
     public List<BusinessMemberResponse> getMembers(String firebaseUid, Long businessId) {
         requireMember(firebaseUid, businessId);
-        return userRepository.findAllByBusinessId(businessId).stream().map(BusinessMemberResponse::from).toList();
+        return membershipRepository.findAllForBusiness(businessId).stream()
+                .map(BusinessMemberResponse::from).toList();
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
@@ -119,10 +118,12 @@ public class BusinessService {
         requireOwner(firebaseUid, businessId);
         requireAssignableRole(request.role());
         User member = lockUser(request.userId());
-        if (member.getBusiness() != null) throw new MembershipConflictException("User already belongs to a business");
-        member.setBusiness(business);
-        member.setBusinessRole(request.role());
-        return BusinessMemberResponse.from(userRepository.save(member));
+        if (membershipRepository.existsByUser_IdAndBusiness_Id(member.getId(), businessId)) {
+            throw new MembershipConflictException("User is already a member of this business");
+        }
+        var membership = createMembership(member, business, request.role());
+        if (member.getBusiness() == null) setLegacyDefault(member, business, request.role());
+        return BusinessMemberResponse.from(membership);
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
@@ -131,21 +132,28 @@ public class BusinessService {
         lockBusiness(businessId);
         requireOwner(firebaseUid, businessId);
         requireAssignableRole(request.role());
-        User member = requireTargetMember(businessId, userId);
-        requireNotOwner(member);
-        member.setBusinessRole(request.role());
-        return BusinessMemberResponse.from(userRepository.save(member));
+        var membership = requireTargetMembership(businessId, userId);
+        requireNotOwner(membership);
+        membership.setRole(request.role());
+        if (membership.getUser().getBusiness() != null
+                && businessId.equals(membership.getUser().getBusiness().getId())) {
+            membership.getUser().setBusinessRole(request.role());
+            userRepository.save(membership.getUser());
+        }
+        return BusinessMemberResponse.from(membershipRepository.save(membership));
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
     public void removeMember(String firebaseUid, Long businessId, Long userId) {
         lockBusiness(businessId);
         requireOwner(firebaseUid, businessId);
-        User member = requireTargetMember(businessId, userId);
-        requireNotOwner(member);
-        member.setBusiness(null);
-        member.setBusinessRole(null);
-        userRepository.save(member);
+        var membership = requireTargetMembership(businessId, userId);
+        requireNotOwner(membership);
+        User member = membership.getUser();
+        membershipRepository.delete(membership);
+        if (member.getBusiness() != null && businessId.equals(member.getBusiness().getId())) {
+            setLegacyDefaultFromRemainingMembership(member, businessId);
+        }
     }
 
     private void applyBusinessFields(Business business, BusinessRequest request, boolean creating) {
@@ -314,20 +322,15 @@ public class BusinessService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private User getCurrentUser(String firebaseUid) {
-        return userRepository.findByFirebaseUid(firebaseUid).orElseThrow(() -> new UserNotFoundException("User not found"));
-    }
-
-    private User requireMember(String firebaseUid, Long businessId) {
-        User user = getCurrentUser(firebaseUid);
-        if (user.getBusiness() == null || !businessId.equals(user.getBusiness().getId()) || user.getBusinessRole() == null) {
-            throw new BusinessAccessDeniedException();
-        }
-        return user;
+    private BusinessMembership requireMember(String firebaseUid, Long businessId) {
+        return membershipRepository.findForFirebaseUserAndBusiness(firebaseUid, businessId)
+                .orElseThrow(BusinessAccessDeniedException::new);
     }
 
     private void requireOwner(String firebaseUid, Long businessId) {
-        if (requireMember(firebaseUid, businessId).getBusinessRole() != BusinessRole.OWNER) throw new BusinessAccessDeniedException();
+        if (requireMember(firebaseUid, businessId).getRole() != BusinessRole.OWNER) {
+            throw new BusinessAccessDeniedException();
+        }
     }
 
     private Business lockBusiness(Long businessId) {
@@ -338,12 +341,9 @@ public class BusinessService {
         return userRepository.findForUpdateById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
     }
 
-    private User requireTargetMember(Long businessId, Long userId) {
-        User member = lockUser(userId);
-        if (member.getBusiness() == null || !businessId.equals(member.getBusiness().getId())) {
-            throw new UserNotFoundException("Business member not found");
-        }
-        return member;
+    private BusinessMembership requireTargetMembership(Long businessId, Long userId) {
+        return membershipRepository.findByUser_IdAndBusiness_Id(userId, businessId)
+                .orElseThrow(() -> new UserNotFoundException("Business member not found"));
     }
 
     private void requireAssignableRole(BusinessRole role) {
@@ -352,7 +352,37 @@ public class BusinessService {
         }
     }
 
-    private void requireNotOwner(User member) {
-        if (member.getBusinessRole() == BusinessRole.OWNER) throw new MembershipConflictException("The owner cannot be removed or demoted");
+    private void requireNotOwner(BusinessMembership membership) {
+        if (membership.getRole() == BusinessRole.OWNER) {
+            throw new MembershipConflictException("The owner cannot be removed or demoted");
+        }
+    }
+
+    private BusinessMembership createMembership(User user, Business business, BusinessRole role) {
+        BusinessMembership membership = new BusinessMembership();
+        membership.setUser(user);
+        membership.setBusiness(business);
+        membership.setRole(role);
+        return membershipRepository.save(membership);
+    }
+
+    /** Keep old profile clients pointed at one valid default; authorization never reads these columns. */
+    private void setLegacyDefault(User user, Business business, BusinessRole role) {
+        user.setBusiness(business);
+        user.setBusinessRole(role);
+        userRepository.save(user);
+    }
+
+    private void setLegacyDefaultFromRemainingMembership(User user, Long removedBusinessId) {
+        membershipRepository.findAllByUser_IdOrderById(user.getId()).stream()
+                .filter(membership -> !removedBusinessId.equals(membership.getBusiness().getId()))
+                .findFirst()
+                .ifPresentOrElse(
+                        membership -> setLegacyDefault(user, membership.getBusiness(), membership.getRole()),
+                        () -> {
+                            user.setBusiness(null);
+                            user.setBusinessRole(null);
+                            userRepository.save(user);
+                        });
     }
 }

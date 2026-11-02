@@ -33,7 +33,7 @@ public class SecurityConfig {
         cors.setAllowedOrigins(Arrays.stream(configuredOrigins.split(","))
                 .map(String::trim).filter(origin -> !origin.isEmpty()).toList());
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cors.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE));
+        cors.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "Idempotency-Key"));
         cors.setExposedHeaders(List.of(HttpHeaders.WWW_AUTHENTICATE));
         cors.setAllowCredentials(false);
         cors.setMaxAge(3600L);

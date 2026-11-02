@@ -24,6 +24,7 @@ import org.mockito.ArgumentCaptor;
 
 class BusinessModelTests {
     private BusinessRepository businesses;
+    private BusinessMembershipRepository memberships;
     private UserRepository users;
     private BusinessLocationRepository locations;
     private BusinessTaxRegistrationRepository taxes;
@@ -34,16 +35,18 @@ class BusinessModelTests {
     @BeforeEach
     void setUp() {
         businesses = mock(BusinessRepository.class);
+        memberships = mock(BusinessMembershipRepository.class);
         users = mock(UserRepository.class);
         locations = mock(BusinessLocationRepository.class);
         taxes = mock(BusinessTaxRegistrationRepository.class);
         departments = mock(DepartmentRepository.class);
-        service = new BusinessService(businesses, users, locations, taxes, departments);
+        service = new BusinessService(businesses, memberships, users, locations, taxes, departments);
         owner = new User();
         owner.setId(5L);
         when(users.findForUpdateByFirebaseUid("firebase-owner")).thenReturn(Optional.of(owner));
         when(users.findByFirebaseUid("firebase-owner")).thenReturn(Optional.of(owner));
         when(users.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
+        when(memberships.save(any(BusinessMembership.class))).thenAnswer(call -> call.getArgument(0));
         when(businesses.saveAndFlush(any(Business.class))).thenAnswer(call -> {
             Business saved = call.getArgument(0);
             if (saved.getId() == null) saved.setId(17L);
@@ -86,14 +89,13 @@ class BusinessModelTests {
     void businessCodesComeFromTheDatabaseSequenceForEachCreation() {
         when(businesses.nextBusinessCodeSequenceValue()).thenReturn(41L, 42L);
         var first = service.createBusiness("firebase-owner", new BusinessRequest());
-        owner.setBusiness(null);
-        owner.setBusinessRole(null);
         var second = service.createBusiness("firebase-owner", new BusinessRequest());
 
         assertEquals("BIZ-00000041", first.businessCode());
         assertEquals("BIZ-00000042", second.businessCode());
         assertNotEquals(first.businessCode(), second.businessCode());
         verify(businesses, times(2)).nextBusinessCodeSequenceValue();
+        verify(memberships, times(2)).save(any(BusinessMembership.class));
     }
 
     @Test
@@ -138,6 +140,8 @@ class BusinessModelTests {
         business.setId(17L);
         owner.setBusiness(business);
         owner.setBusinessRole(BusinessRole.OWNER);
+        when(memberships.findForFirebaseUserAndBusiness("firebase-owner", 17L))
+                .thenReturn(Optional.of(membership(owner, business, BusinessRole.OWNER)));
         BusinessLocation registered = new BusinessLocation();
         registered.setId(45L);
         registered.setBusiness(business);
@@ -163,6 +167,8 @@ class BusinessModelTests {
         other.setId(18L);
         owner.setBusiness(current);
         owner.setBusinessRole(BusinessRole.OWNER);
+        when(memberships.findForFirebaseUserAndBusiness("firebase-owner", 17L))
+                .thenReturn(Optional.of(membership(owner, current, BusinessRole.OWNER)));
         when(businesses.findForUpdateById(17L)).thenReturn(Optional.of(current));
         BusinessLocation foreign = new BusinessLocation();
         foreign.setId(9L);
@@ -175,5 +181,13 @@ class BusinessModelTests {
         assertThrows(BusinessAccessDeniedException.class,
                 () -> service.updateBusiness("firebase-owner", 17L, request));
         verify(locations, never()).save(any(BusinessLocation.class));
+    }
+
+    private BusinessMembership membership(User user, Business business, BusinessRole role) {
+        BusinessMembership membership = new BusinessMembership();
+        membership.setUser(user);
+        membership.setBusiness(business);
+        membership.setRole(role);
+        return membership;
     }
 }

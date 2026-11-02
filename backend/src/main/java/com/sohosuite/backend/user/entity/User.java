@@ -58,6 +58,8 @@ public class User {
     @Column(name = "phone")
     private String phoneNumber;
 
+    // Legacy default-business projection retained for profile API compatibility only.
+    // Authorization and membership operations must use BusinessMembership.
     @ManyToOne
     @JoinColumn(name = "business_id")
     private Business business;

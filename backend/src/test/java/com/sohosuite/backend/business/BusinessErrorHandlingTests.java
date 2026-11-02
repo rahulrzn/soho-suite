@@ -22,6 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -35,16 +37,21 @@ class BusinessErrorHandlingTests {
             """;
 
     private BusinessRepository repository;
+    private BusinessMembershipRepository memberships;
     private BusinessLocationRepository locations;
     private BusinessTaxRegistrationRepository taxes;
     private DepartmentRepository departments;
     private MockMvc mvc;
     private UserRepository users;
     private User owner;
+    private User targetForTests;
+    private Business business;
+    private BusinessMembership ownerMembership;
 
     @BeforeEach
     void setUp() {
         repository = mock(BusinessRepository.class);
+        memberships = mock(BusinessMembershipRepository.class);
         locations = mock(BusinessLocationRepository.class);
         taxes = mock(BusinessTaxRegistrationRepository.class);
         departments = mock(DepartmentRepository.class);
@@ -52,13 +59,36 @@ class BusinessErrorHandlingTests {
         owner = new User();
         owner.setId(1L);
         owner.setBusinessRole(BusinessRole.OWNER);
-        Business business = new Business();
+        business = new Business();
         business.setId(1L);
         owner.setBusiness(business);
+        ownerMembership = new BusinessMembership();
+        ownerMembership.setId(10L);
+        ownerMembership.setUser(owner);
+        ownerMembership.setBusiness(business);
+        ownerMembership.setRole(BusinessRole.OWNER);
+        when(memberships.findForFirebaseUserAndBusiness(eq("owner"), anyLong())).thenAnswer(i -> {
+            if (owner.getBusiness() != null && owner.getBusiness().getId().equals(i.getArgument(1))) {
+                return Optional.of(ownerMembership);
+            }
+            return Optional.empty();
+        });
+        when(memberships.findAllForBusiness(1L)).thenReturn(java.util.List.of(ownerMembership));
+        when(memberships.save(any(BusinessMembership.class))).thenAnswer(i -> i.getArgument(0));
+        when(memberships.existsByUser_IdAndBusiness_Id(anyLong(), anyLong())).thenReturn(false);
+        targetForTests = new User();
+        targetForTests.setId(2L);
+        when(memberships.findByUser_IdAndBusiness_Id(2L, 1L)).thenAnswer(i -> {
+            BusinessMembership membership = new BusinessMembership();
+            membership.setUser(targetForTests);
+            membership.setBusiness(business);
+            membership.setRole(BusinessRole.VIEWER);
+            return Optional.of(membership);
+        });
         when(users.findByFirebaseUid("owner")).thenReturn(Optional.of(owner));
         when(users.findForUpdateByFirebaseUid("owner")).thenReturn(Optional.of(owner));
         when(repository.findForUpdateById(1L)).thenReturn(Optional.of(business));
-        when(users.findAllByBusinessId(1L)).thenReturn(java.util.List.of(owner));
+        when(memberships.findAllByUser_IdOrderById(2L)).thenReturn(java.util.List.of());
         FirebaseTokenVerifier verifier = mock(FirebaseTokenVerifier.class);
         when(verifier.verify(any())).thenAnswer(invocation -> {
             if (!"Bearer valid-token".equals(invocation.getArgument(0))) {
@@ -73,7 +103,7 @@ class BusinessErrorHandlingTests {
             return saved;
         });
         mvc = MockMvcBuilders.standaloneSetup(new BusinessController(
-                        new BusinessService(repository, users, locations, taxes, departments)))
+                        new BusinessService(repository, memberships, users, locations, taxes, departments)))
                 .defaultRequest(get("/").header("Authorization", "Bearer valid-token"))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .addFilters(new FirebaseBearerTokenFilter(verifier))
@@ -86,6 +116,7 @@ class BusinessErrorHandlingTests {
         mvc.perform(get("/api/businesses").header("Authorization", "Basic invalid"))
                 .andExpect(status().isUnauthorized());
         owner.setBusinessRole(BusinessRole.VIEWER);
+        ownerMembership.setRole(BusinessRole.VIEWER);
         mvc.perform(put("/api/businesses/1").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         mvc.perform(post("/api/businesses/1/members").contentType(MediaType.APPLICATION_JSON)
@@ -102,8 +133,7 @@ class BusinessErrorHandlingTests {
         target.setUsername("member");
         target.setEmail("private@example.com");
         target.setFirebaseUid("private-uid");
-        when(users.findForUpdateById(2L)).thenReturn(Optional.of(target));
-        when(users.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        when(users.findForUpdateById(2L)).thenReturn(Optional.of(targetForTests));
         mvc.perform(post("/api/businesses/1/members").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":2,\"role\":\"VIEWER\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("VIEWER"))
@@ -118,13 +148,19 @@ class BusinessErrorHandlingTests {
                         .content("{\"role\":\"INVALID\"}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(delete("/api/businesses/1/members/2")).andExpect(status().isNoContent());
-        org.junit.jupiter.api.Assertions.assertNull(target.getBusiness());
+        org.junit.jupiter.api.Assertions.assertNull(targetForTests.getBusiness());
     }
 
     @Test
     void missingBusinessReturnsSameErrorForGetPutAndDelete() throws Exception {
         when(repository.findById(999L)).thenReturn(Optional.empty());
+        Business previous = owner.getBusiness();
         owner.getBusiness().setId(999L);
+        BusinessMembership missingBusinessMembership = new BusinessMembership();
+        missingBusinessMembership.setBusiness(owner.getBusiness());
+        missingBusinessMembership.setUser(owner);
+        missingBusinessMembership.setRole(BusinessRole.OWNER);
+        when(memberships.findForFirebaseUserAndBusiness("owner", 999L)).thenReturn(Optional.of(missingBusinessMembership));
 
         for (var request : new org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder[] {
                 get("/api/businesses/999"),
@@ -138,6 +174,7 @@ class BusinessErrorHandlingTests {
         }
         verify(repository, never()).save(any());
         verify(repository, never()).delete(any(Business.class));
+        owner.setBusiness(previous);
     }
 
     @Test

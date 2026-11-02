@@ -25,11 +25,15 @@ import static org.mockito.ArgumentMatchers.any;
 
 class BusinessMembershipTests {
     private BusinessRepository businesses;
+    private BusinessMembershipRepository memberships;
     private UserRepository users;
     private BusinessService service;
     private Business business;
+    private Business secondBusiness;
     private User actor;
     private User target;
+    private BusinessMembership actorMembership;
+    private BusinessMembership targetMembership;
     private BusinessLocationRepository locations;
     private BusinessTaxRegistrationRepository taxes;
     private DepartmentRepository departments;
@@ -37,24 +41,39 @@ class BusinessMembershipTests {
     @BeforeEach
     void setUp() {
         businesses = mock(BusinessRepository.class);
+        memberships = mock(BusinessMembershipRepository.class);
         users = mock(UserRepository.class);
         locations = mock(BusinessLocationRepository.class);
         taxes = mock(BusinessTaxRegistrationRepository.class);
         departments = mock(DepartmentRepository.class);
-        service = new BusinessService(businesses, users, locations, taxes, departments);
+        service = new BusinessService(businesses, memberships, users, locations, taxes, departments);
         business = new Business();
         business.setId(10L);
+        secondBusiness = new Business();
+        secondBusiness.setId(20L);
         actor = new User();
         actor.setId(1L);
         actor.setBusiness(business);
         actor.setBusinessRole(BusinessRole.OWNER);
+        actorMembership = membership(actor, business, BusinessRole.OWNER);
         target = new User();
         target.setId(2L);
+        targetMembership = membership(target, business, BusinessRole.VIEWER);
         when(users.findByFirebaseUid("actor")).thenReturn(Optional.of(actor));
         when(users.findForUpdateByFirebaseUid("actor")).thenReturn(Optional.of(actor));
         when(users.findForUpdateById(2L)).thenReturn(Optional.of(target));
+        when(memberships.findForFirebaseUserAndBusiness(eq("actor"), any())).thenAnswer(i ->
+                ((Long)i.getArgument(1)).equals(10L) ? Optional.of(actorMembership) : Optional.empty());
+        when(memberships.findAllForFirebaseUser("actor")).thenAnswer(i -> List.of(actorMembership));
+        when(memberships.findAllForBusiness(10L)).thenAnswer(i -> List.of(actorMembership, targetMembership));
+        when(memberships.findByUser_IdAndBusiness_Id(2L, 10L)).thenReturn(Optional.of(targetMembership));
+        when(memberships.existsByUser_IdAndBusiness_Id(any(), any())).thenReturn(false);
+        when(memberships.save(any(BusinessMembership.class))).thenAnswer(i -> i.getArgument(0));
+        when(memberships.findAllByUser_IdOrderById(any())).thenReturn(List.of());
         when(businesses.findById(10L)).thenReturn(Optional.of(business));
+        when(businesses.findById(20L)).thenReturn(Optional.of(secondBusiness));
         when(businesses.findForUpdateById(10L)).thenReturn(Optional.of(business));
+        when(businesses.findForUpdateById(20L)).thenReturn(Optional.of(secondBusiness));
         when(users.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
         when(businesses.nextBusinessCodeSequenceValue()).thenReturn(1L);
         when(businesses.saveAndFlush(any(Business.class))).thenAnswer(i -> {
@@ -65,16 +84,18 @@ class BusinessMembershipTests {
     }
 
     @Test
-    void creationSetsOwnerAndRejectsSecondBusiness() {
-        assertThrows(MembershipConflictException.class, () -> service.createBusiness("actor", new BusinessRequest()));
-        verify(businesses, never()).saveAndFlush(any());
+    void creationSetsOwnerAndAllowsMultipleBusinesses() {
         actor.setBusiness(null);
+        actor.setBusinessRole(null);
         var saved = service.createBusiness("actor", new BusinessRequest());
         assertEquals(10L, saved.id());
         assertEquals("BIZ-00000001", saved.businessCode());
         assertEquals(saved.id(), actor.getBusiness().getId());
         assertEquals(BusinessRole.OWNER, actor.getBusinessRole());
         verify(users).save(actor);
+        var second = service.createBusiness("actor", new BusinessRequest());
+        assertEquals(saved.id(), second.id());
+        verify(memberships, times(2)).save(any(BusinessMembership.class));
     }
 
     @Test
@@ -86,6 +107,7 @@ class BusinessMembershipTests {
     @ParameterizedTest
     @EnumSource(BusinessRole.class)
     void membersCanReadOnlyTheirOwnBusiness(BusinessRole role) {
+        actorMembership.setRole(role);
         actor.setBusinessRole(role);
         assertEquals(10L, service.getCurrentUserBusinesses("actor").getFirst().id());
         assertEquals(10L, service.getBusinessById("actor", 10L).id());
@@ -95,17 +117,42 @@ class BusinessMembershipTests {
     }
 
     @Test
+    void oneUserCanHaveDifferentRolesAcrossBusinesses() {
+        BusinessMembership secondRole = membership(actor, secondBusiness, BusinessRole.VIEWER);
+        when(memberships.findAllForFirebaseUser("actor")).thenReturn(List.of(actorMembership, secondRole));
+        when(memberships.findForFirebaseUserAndBusiness("actor", 20L)).thenReturn(Optional.of(secondRole));
+        when(businesses.findById(20L)).thenReturn(Optional.of(secondBusiness));
+
+        assertEquals(2, service.getCurrentUserBusinesses("actor").size());
+        assertEquals(10L, service.getBusinessById("actor", 10L).id());
+        assertEquals(20L, service.getBusinessById("actor", 20L).id());
+        assertThrows(BusinessAccessDeniedException.class,
+                () -> service.updateBusiness("actor", 20L, new BusinessRequest()));
+        assertThrows(BusinessAccessDeniedException.class, () -> service.addMember("actor", 20L,
+                new AddBusinessMemberRequest(2L, BusinessRole.VIEWER)));
+        assertThrows(BusinessAccessDeniedException.class, () -> service.updateMemberRole("actor", 20L, 2L,
+                new UpdateBusinessMemberRoleRequest(BusinessRole.MANAGER)));
+        assertThrows(BusinessAccessDeniedException.class, () -> service.removeMember("actor", 20L, 2L));
+        assertEquals(BusinessRole.OWNER, actorMembership.getRole());
+        assertEquals(BusinessRole.VIEWER, secondRole.getRole());
+    }
+
+    @Test
     void unassignedAndLegacyUnclassifiedUsersHaveNoAccess() {
+        actorMembership.setRole(null);
         actor.setBusinessRole(null);
+        when(memberships.findAllForFirebaseUser("actor")).thenReturn(List.of());
+        when(memberships.findForFirebaseUserAndBusiness("actor", 10L)).thenReturn(Optional.empty());
         assertTrue(service.getCurrentUserBusinesses("actor").isEmpty());
         assertThrows(BusinessAccessDeniedException.class, () -> service.getBusinessById("actor", 10L));
-        actor.setBusiness(null);
+        actorMembership = null;
         assertTrue(service.getCurrentUserBusinesses("actor").isEmpty());
     }
 
     @ParameterizedTest
     @EnumSource(BusinessRole.class)
     void updatePermissions(BusinessRole role) {
+        actorMembership.setRole(role);
         actor.setBusinessRole(role);
         if (role == BusinessRole.VIEWER) {
             assertThrows(BusinessAccessDeniedException.class,
@@ -120,6 +167,7 @@ class BusinessMembershipTests {
     @ParameterizedTest
     @EnumSource(value = BusinessRole.class, names = {"MANAGER", "VIEWER"})
     void onlyOwnerManagesMembershipAndDeletes(BusinessRole role) {
+        actorMembership.setRole(role);
         actor.setBusinessRole(role);
         assertThrows(BusinessAccessDeniedException.class, () -> service.addMember("actor", 10L,
                 new AddBusinessMemberRequest(2L, BusinessRole.VIEWER)));
@@ -145,8 +193,7 @@ class BusinessMembershipTests {
 
     @Test
     void ownerCannotBeRemovedDemotedOrAssigned() {
-        target.setBusiness(business);
-        target.setBusinessRole(BusinessRole.OWNER);
+        targetMembership.setRole(BusinessRole.OWNER);
         assertThrows(MembershipConflictException.class, () -> service.removeMember("actor", 10L, 2L));
         assertThrows(MembershipConflictException.class, () -> service.updateMemberRole("actor", 10L,
                 2L, new UpdateBusinessMemberRoleRequest(BusinessRole.VIEWER)));
@@ -155,29 +202,34 @@ class BusinessMembershipTests {
     }
 
     @Test
-    void memberCannotBeTakenFromAnotherBusiness() {
+    void userCanJoinMultipleBusinesses() {
         Business other = new Business();
         other.setId(20L);
-        target.setBusiness(other);
-        assertThrows(MembershipConflictException.class, () -> service.addMember("actor", 10L,
-                new AddBusinessMemberRequest(2L, BusinessRole.VIEWER)));
-        assertThrows(UserNotFoundException.class, () -> service.removeMember("actor", 10L, 2L));
-        verify(users, never()).save(any());
+        var added = service.addMember("actor", 10L, new AddBusinessMemberRequest(2L, BusinessRole.VIEWER));
+        assertEquals(BusinessRole.VIEWER, added.role());
+        BusinessMembership otherMembership = membership(target, other, BusinessRole.MANAGER);
+        when(memberships.findByUser_IdAndBusiness_Id(2L, 20L)).thenReturn(Optional.of(otherMembership));
+        assertEquals(BusinessRole.MANAGER, memberships.findByUser_IdAndBusiness_Id(2L, 20L).orElseThrow().getRole());
+        assertThrows(BusinessAccessDeniedException.class, () -> service.removeMember("actor", 20L, 2L));
     }
 
     @Test
     void deletingBusinessDetachesMembersBeforeDeletion() {
-        target.setBusiness(business);
-        target.setBusinessRole(BusinessRole.VIEWER);
-        when(users.findAllByBusinessId(10L)).thenReturn(List.of(actor, target));
+        when(memberships.findAllForBusiness(10L)).thenReturn(List.of(actorMembership, targetMembership));
+        when(memberships.findAllByUser_IdOrderById(1L)).thenReturn(List.of());
+        when(memberships.findAllByUser_IdOrderById(2L)).thenReturn(List.of());
         service.deleteBusiness("actor", 10L);
         assertNull(actor.getBusiness());
         assertNull(target.getBusiness());
         assertNull(actor.getBusinessRole());
         assertNull(target.getBusinessRole());
-        var order = inOrder(users, businesses);
-        order.verify(users).saveAll(List.of(actor, target));
-        order.verify(users).flush();
+        var order = inOrder(memberships, businesses);
+        order.verify(memberships).deleteAll(List.of(actorMembership, targetMembership));
         order.verify(businesses).delete(business);
+    }
+
+    private BusinessMembership membership(User user, Business business, BusinessRole role) {
+        BusinessMembership membership = new BusinessMembership();
+        membership.setUser(user); membership.setBusiness(business); membership.setRole(role); return membership;
     }
 }

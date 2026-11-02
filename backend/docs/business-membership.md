@@ -1,8 +1,15 @@
 # Business membership and permissions
 
-Each user belongs to at most one business. `users.business_id` stores the relationship;
-`users.business_role` stores OWNER, MANAGER or VIEWER as a string. Users without a business
-have no business role. Firebase authenticates callers; PostgreSQL membership authorizes them.
+Users can belong to multiple businesses. `business_membership` is the canonical relationship:
+each row stores one user, one business and that business's OWNER, MANAGER or VIEWER role.
+The database enforces unique `(business_id, user_id)` pairs. Firebase authenticates callers;
+PostgreSQL membership authorizes each request against its requested business.
+
+`users.business_id` and `users.business_role` remain as a compatibility projection for older
+profile clients. They point to one default membership and are synchronized when that default is
+created, changed, or removed. They are not an authorization source. `GET /api/businesses`
+returns every membership's business, ordered by membership creation; the current frontend uses
+the first business until a business selector is added.
 
 | Operation | Owner | Manager | Viewer |
 | --- | --- | --- | --- |
@@ -11,10 +18,11 @@ have no business role. Firebase authenticates callers; PostgreSQL membership aut
 | Add/remove members or change roles | Yes | No | No |
 | Delete business | Yes | No | No |
 
-Creating a business requires an existing local user profile without business membership.
-The creator is assigned OWNER in the same transaction. A supplied business ID is never used:
-the business request DTO only accepts editable details. Listing businesses returns only the
-caller's business (or an empty array). All business routes require a Firebase ID token.
+Creating a business requires an existing local user profile. The creator receives an OWNER
+membership in the same transaction; users may create or join additional businesses. A supplied
+business ID is never used to establish access: the business request DTO only accepts editable
+details. Listing businesses returns only businesses with a persisted membership for the caller.
+All business routes require a Firebase ID token.
 
 ## Membership endpoints
 
@@ -23,14 +31,15 @@ caller's business (or an empty array). All business routes require a Firebase ID
 - PATCH `/api/businesses/{id}/members/{userId}/role`: `{"role":"MANAGER"}`.
 - DELETE `/api/businesses/{id}/members/{userId}`: removes membership, preserving the user profile.
 
-Only MANAGER and VIEWER can be assigned. Ownership transfer and owner removal/demotion are
-not supported. Owners can delete their business; deletion clears all memberships and roles
-before deleting the business, within one transaction. Adding a user already in any business
-returns 409 MEMBERSHIP_CONFLICT. Unauthorized operations return 403 FORBIDDEN.
+Only MANAGER and VIEWER can be assigned through member management. Ownership transfer and
+owner removal/demotion are not supported. Owners can delete their business; deletion removes
+that business's memberships transactionally while preserving users' memberships in other
+businesses. Adding a user who is already a member of the selected business returns 409
+MEMBERSHIP_CONFLICT. Unauthorized operations return 403 FORBIDDEN.
 
 This is direct assignment of existing users by their local user ID, not an email invitation
 or acceptance workflow. New users must first complete their profile. Their ID is in the
-`/api/users/me` response. Multiple-business membership is not implemented.
+`/api/users/me` response.
 
 ## Database rollout
 
@@ -42,6 +51,7 @@ the legitimate owner/members. Existing memberships with a null role are denied a
 Businesses with no members need administrative ownership assignment before API access.
 
 Transactional writes lock the business while changing permissions/membership or deleting it.
-User locks prevent simultaneous assignment/creation from putting a user into two businesses.
-Tests use mocked repositories and Firebase verification; live PostgreSQL lock/rollback behavior
-and real Firebase authentication still require integration verification.
+User locks serialize profile-level assignment/creation operations; the unique membership
+constraint is the final duplicate guard. Tests use mocked repositories and Firebase verification;
+live PostgreSQL lock/rollback behavior and real Firebase authentication still require integration
+verification.

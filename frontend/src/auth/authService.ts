@@ -46,7 +46,7 @@ export async function getIdToken(): Promise<string> {
   if (!user) {
     throw new Error('You must be signed in to get an ID token.')
   }
-  return await user.getIdToken()
+  return await user.getIdToken(true)
 }
 
 export function getCurrentFirebaseUser(): User | null {

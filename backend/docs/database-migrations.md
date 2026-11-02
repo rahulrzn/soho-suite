@@ -7,8 +7,9 @@ update, or validate the database schema. Database connection credentials continu
 ## Migration sequence
 
 The migration sequence is `V1__initial_schema.sql`, `V2__relax_legacy_user_columns.sql`,
-`V3__expand_business_model.sql`, then `V4__enforce_case_insensitive_user_email_uniqueness.sql`.
-On a genuinely empty database, application startup applies all four in order. Startup therefore
+`V3__expand_business_model.sql`, `V4__enforce_case_insensitive_user_email_uniqueness.sql`,
+`V5__add_dataset_imports.sql`, and `V6__add_business_memberships.sql`. On a genuinely empty
+database, application startup applies the migrations in order. Startup therefore
 changes the database on a fresh installation. Do not run the backend against an existing non-empty
 schema without confirming its Flyway history and schema state.
 
@@ -35,6 +36,10 @@ Migrations below describe expected schema transitions, not the state of any part
 - **V3** expands the business model and keeps `company` and `pincode` for compatibility.
 - **V4** checks case-insensitive duplicate emails and adds a unique index on `lower(users.email)`.
   If duplicates exist, it aborts without changing user data; resolve them explicitly before retrying.
+- **V5** adds dataset metadata and string-valued row storage.
+- **V6** creates canonical per-business memberships, validates legacy assignments before copying
+  them, checks the copied count, and retains `users.business_id` / `users.business_role` as a
+  default-business compatibility projection. Authorization must use the membership table.
 
 The application lowercases new emails. The index protects concurrent inserts and other writers.
 Hibernate schema validation is disabled (`ddl-auto=none`); Flyway owns schema changes. Before V4 on

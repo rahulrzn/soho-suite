@@ -1,6 +1,7 @@
 package com.sohosuite.backend.exception;
 
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 import org.slf4j.Logger;
@@ -145,6 +146,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleRouteNotFound(Exception exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                 "code", "NOT_FOUND", "message", "Endpoint not found"));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidImport(IllegalArgumentException exception) {
+        return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR", "message", exception.getMessage()));
+    }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<Map<String, String>> handleMissingDataset(NoSuchElementException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("code", "NOT_FOUND", "message", "Dataset not found"));
     }
 
     @ExceptionHandler(Exception.class)
