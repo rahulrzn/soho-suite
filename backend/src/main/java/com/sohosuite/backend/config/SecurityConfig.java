@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .map(String::trim).filter(origin -> !origin.isEmpty()).toList());
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "Idempotency-Key"));
-        cors.setExposedHeaders(List.of(HttpHeaders.WWW_AUTHENTICATE));
+        cors.setExposedHeaders(List.of(HttpHeaders.WWW_AUTHENTICATE, HttpHeaders.CONTENT_DISPOSITION));
         cors.setAllowCredentials(false);
         cors.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

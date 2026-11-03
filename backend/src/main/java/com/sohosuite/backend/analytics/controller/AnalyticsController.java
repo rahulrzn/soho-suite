@@ -3,10 +3,13 @@ package com.sohosuite.backend.analytics.controller;
 import com.sohosuite.backend.analytics.dto.AnalyticsDatasetConfigRequest;
 import com.sohosuite.backend.analytics.dto.AnalyticsDatasetConfigResponse;
 import com.sohosuite.backend.analytics.dto.AnalyticsOverviewResponse;
+import com.sohosuite.backend.analytics.dto.BusinessHealthScoreResponse;
+import com.sohosuite.backend.analytics.service.BusinessHealthScoreService;
 import com.sohosuite.backend.analytics.service.AnalyticsService;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,9 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
+    private final BusinessHealthScoreService healthScoreService;
 
-    public AnalyticsController(AnalyticsService analyticsService) {
+    @Autowired
+    public AnalyticsController(AnalyticsService analyticsService, BusinessHealthScoreService healthScoreService) {
         this.analyticsService = analyticsService;
+        this.healthScoreService = healthScoreService;
     }
 
     @PutMapping("/dataset-config")
@@ -41,5 +47,14 @@ public class AnalyticsController {
             @RequestParam LocalDate from,
             @RequestParam LocalDate to) {
         return analyticsService.overview(identity, businessId, from, to);
+    }
+
+    @GetMapping("/health-score")
+    public BusinessHealthScoreResponse healthScore(
+            @AuthenticationPrincipal VerifiedFirebaseIdentity identity,
+            @PathVariable Long businessId,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        return healthScoreService.score(identity, businessId, from, to);
     }
 }

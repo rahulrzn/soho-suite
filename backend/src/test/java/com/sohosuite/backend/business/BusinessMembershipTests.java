@@ -46,7 +46,8 @@ class BusinessMembershipTests {
         locations = mock(BusinessLocationRepository.class);
         taxes = mock(BusinessTaxRegistrationRepository.class);
         departments = mock(DepartmentRepository.class);
-        service = new BusinessService(businesses, memberships, users, locations, taxes, departments);
+        service = new BusinessService(businesses, memberships, users, locations, taxes, departments,
+                mock(com.sohosuite.backend.activity.service.BusinessActivityService.class));
         business = new Business();
         business.setId(10L);
         secondBusiness = new Business();

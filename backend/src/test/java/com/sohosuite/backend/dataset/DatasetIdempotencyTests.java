@@ -41,7 +41,8 @@ class DatasetIdempotencyTests {
         rows = mock(DatasetRowRepository.class);
         memberships = mock(BusinessMembershipRepository.class);
         lock = mock(DatasetIdempotencyLock.class);
-        service = new DatasetService(datasets, rows, memberships, lock);
+        service = new DatasetService(datasets, rows, memberships, lock,
+                mock(com.sohosuite.backend.activity.service.BusinessActivityService.class));
         ReflectionTestUtils.setField(service, "maxBytes", 5L * 1024 * 1024);
         ReflectionTestUtils.setField(service, "maxRows", 20_000);
         ReflectionTestUtils.setField(service, "maxColumns", 100);

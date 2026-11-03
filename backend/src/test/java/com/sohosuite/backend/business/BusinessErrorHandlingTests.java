@@ -103,7 +103,8 @@ class BusinessErrorHandlingTests {
             return saved;
         });
         mvc = MockMvcBuilders.standaloneSetup(new BusinessController(
-                        new BusinessService(repository, memberships, users, locations, taxes, departments)))
+                        new BusinessService(repository, memberships, users, locations, taxes, departments,
+                                mock(com.sohosuite.backend.activity.service.BusinessActivityService.class))))
                 .defaultRequest(get("/").header("Authorization", "Bearer valid-token"))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .addFilters(new FirebaseBearerTokenFilter(verifier))

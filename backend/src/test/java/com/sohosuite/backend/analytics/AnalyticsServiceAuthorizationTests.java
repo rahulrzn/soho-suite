@@ -15,6 +15,7 @@ import com.sohosuite.backend.analytics.dto.MetricStatus;
 import com.sohosuite.backend.analytics.entity.DatasetAnalyticsConfiguration;
 import com.sohosuite.backend.analytics.repository.DatasetAnalyticsConfigurationRepository;
 import com.sohosuite.backend.analytics.service.AnalyticsService;
+import com.sohosuite.backend.activity.service.BusinessActivityService;
 import com.sohosuite.backend.business.entity.Business;
 import com.sohosuite.backend.business.entity.BusinessMembership;
 import com.sohosuite.backend.business.enums.BusinessRole;
@@ -40,8 +41,9 @@ class AnalyticsServiceAuthorizationTests {
     private final DatasetRepository datasets = mock(DatasetRepository.class);
     private final DatasetRowRepository rows = mock(DatasetRowRepository.class);
     private final DatasetAnalyticsConfigurationRepository configurations = mock(DatasetAnalyticsConfigurationRepository.class);
+    private final BusinessActivityService activity = mock(BusinessActivityService.class);
     private final AnalyticsService service = new AnalyticsService(
-            memberships, datasets, rows, configurations);
+            memberships, datasets, rows, configurations, activity);
     private final VerifiedFirebaseIdentity identity = new VerifiedFirebaseIdentity(
             FIREBASE_UID, "analytics@example.test", true);
 

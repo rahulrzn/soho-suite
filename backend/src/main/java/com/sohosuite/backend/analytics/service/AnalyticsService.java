@@ -6,6 +6,7 @@ import com.sohosuite.backend.analytics.dto.AnalyticsDatasetConfigRequest;
 import com.sohosuite.backend.analytics.dto.AnalyticsDatasetConfigResponse;
 import com.sohosuite.backend.analytics.dto.AnalyticsOverviewResponse;
 import com.sohosuite.backend.analytics.dto.MetricResult;
+import com.sohosuite.backend.activity.service.BusinessActivityService;
 import com.sohosuite.backend.analytics.entity.DatasetAnalyticsConfiguration;
 import com.sohosuite.backend.analytics.repository.DatasetAnalyticsConfigurationRepository;
 import com.sohosuite.backend.business.entity.BusinessMembership;
@@ -44,17 +45,20 @@ public class AnalyticsService {
     private final DatasetRepository datasets;
     private final DatasetRowRepository rows;
     private final DatasetAnalyticsConfigurationRepository configurations;
+    private final BusinessActivityService activity;
     private final ObjectMapper json = new ObjectMapper();
 
     public AnalyticsService(
             BusinessMembershipRepository memberships,
             DatasetRepository datasets,
             DatasetRowRepository rows,
-            DatasetAnalyticsConfigurationRepository configurations) {
+            DatasetAnalyticsConfigurationRepository configurations,
+            BusinessActivityService activity) {
         this.memberships = memberships;
         this.datasets = datasets;
         this.rows = rows;
         this.configurations = configurations;
+        this.activity = activity;
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
@@ -103,7 +107,10 @@ public class AnalyticsService {
         config.setOrderIdColumn(orderColumn);
         config.setCustomerIdColumn(customerColumn);
         config.setConfirmedCurrency(businessCurrency);
-        return toConfigResponse(configurations.save(config));
+        DatasetAnalyticsConfiguration saved = configurations.save(config);
+        activity.record(businessId, actor.getUser().getId(), "ANALYTICS_CONFIGURED", "DATASET",
+                saved.getDatasetId().toString(), "Business analytics configuration updated");
+        return toConfigResponse(saved);
     }
 
     @Transactional(readOnly = true)

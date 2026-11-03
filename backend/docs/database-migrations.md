@@ -8,12 +8,15 @@ update, or validate the database schema. Database connection credentials continu
 
 The migration sequence is `V1__initial_schema.sql`, `V2__relax_legacy_user_columns.sql`,
 `V3__expand_business_model.sql`, `V4__enforce_case_insensitive_user_email_uniqueness.sql`,
-`V5__add_dataset_imports.sql`, `V6__add_business_memberships.sql`, and
-`V7__add_dataset_request_fingerprint.sql`, and `V8__create_dataset_analytics_config.sql`.
-On a genuinely empty
-database, application startup applies the migrations in order. Startup therefore
+`V5__add_dataset_imports.sql`, `V6__add_business_memberships.sql`,
+`V7__add_dataset_request_fingerprint.sql`, `V8__create_dataset_analytics_config.sql`,
+`V9__add_mvp_operations.sql`, `V10__enforce_single_business_owner.sql`, and
+`V11__enforce_exactly_one_business_owner.sql`.
+On a genuinely empty database, application startup applies V1 onward in order. Startup therefore
 changes the database on a fresh installation. Do not run the backend against an existing non-empty
-schema without confirming its Flyway history and schema state.
+schema without confirming its Flyway history and schema state. Flyway is the supported installation
+path. The old manual Firebase SQL was removed because it had no supported setup use and conflicted
+with V2; it is not part of any migration path.
 
 ## Initial migration
 
@@ -46,6 +49,16 @@ Migrations below describe expected schema transitions, not the state of any part
   pre-V7 imports because their source files were not retained and cannot be fingerprinted reliably.
 - **V8** stores the explicitly confirmed analytics dataset and column mappings for each business.
   It references the selected business and dataset and records the confirmed currency.
+- **V9** adds business activity events, invitation and ownership-transfer records, business expenses,
+  inventory items, and the inventory movement ledger. It is additive and does not alter V1–V8.
+- **V10** adds a partial unique index allowing at most one OWNER membership for a business. It stops
+  without changing membership data if existing rows contain multiple owners; resolve those cases only
+  with an explicitly reviewed plan. Application transactions ensure a business created through the
+  API has an owner and preserve the owner during transfer/removal flows.
+- **V11** adds deferred database checks requiring exactly one OWNER for every business. It stops before
+  creating triggers if existing businesses do not already have exactly one owner; reconcile those
+  records only under an explicitly reviewed plan. The deferred checks permit the two-step ownership
+  swap inside one transaction while rejecting incomplete changes at commit.
 
 The application lowercases new emails. The index protects concurrent inserts and other writers.
 Hibernate schema validation is disabled (`ddl-auto=none`); Flyway owns schema changes. Before V4 on
@@ -54,17 +67,17 @@ read-only query.
 
 ## Fresh database
 
-On a genuinely empty database with `public` available, Flyway applies V1 through V4 when the
-application starts. Review the migrations before startup: startup performs schema changes, and V4
-stops if duplicate emails require an explicit resolution.
+On a genuinely empty database with `public` available, Flyway applies V1 through V11 (and later
+additive versions) when the application starts. Review the migrations before startup: startup
+performs schema changes, and V4 stops if duplicate emails require an explicit resolution.
 
 ## Existing local database: manual baseline procedure
 
-Baseline only a database that is not already managed by Flyway and whose schema is verified to match
-the selected baseline version. Baselining creates `public.flyway_schema_history` and records a
+Baseline only a database that is not already managed by Flyway, has an explicitly approved baseline
+plan, and whose schema is verified to match the selected baseline version. Baselining creates `public.flyway_schema_history` and records a
 version; it does not execute or validate that version's migration SQL. A V1 baseline means Flyway
-will apply V2 through V4. For a database already managed through V3, do not baseline it: verify its
-history and let Flyway apply V4. A database at V4 needs no migration. Never baseline a database
+will apply V2 and every later migration. For a database already managed through V3, do not baseline it:
+verify its history and let Flyway apply V4 onward. A database at V4 needs V5 onward. Never baseline a database
 already managed by Flyway.
 
 Before baselining, take and verify a database backup. Confirm the target is `sohosuite`, the schema is
@@ -114,7 +127,7 @@ flyway -baselineVersion=1 baseline
 Review the command target and output before running it. This is a database-changing operation: it
 adds Flyway history metadata but does not execute V1. Only run it after the exact V1 audit and backup.
 Afterward, verify `public.flyway_schema_history` contains a successful baseline row at version 1.
-Then backend startup applies V2, V3, and V4, which change the database. Clear both password variables
+Then backend startup applies V2 through V11, which change the database. Clear both password variables
 when finished:
 
 ```powershell
@@ -162,8 +175,9 @@ for that procedure, set `FLYWAY_URL`, `FLYWAY_USER`, `FLYWAY_PASSWORD`, `FLYWAY_
 
 The older development database inspection in `firebase-authentication.md` found that `users` lacked
 `firebase_uid` and `username`. If the current database still has that schema, it does not match V1
-and must not be baselined at version 1. The Firebase guide's manual compatibility SQL also conflicts
-with V2; resolve that migration-path conflict before making any schema changes.
+and must not be baselined at version 1. The former Firebase manual SQL conflicted with V2 and was
+removed. If it may have been run on an existing environment, review that environment's actual schema
+and migration history before making any schema changes.
 
 ## Business model expansion
 
@@ -175,8 +189,8 @@ codes from a PostgreSQL sequence. It copies legacy address values into a registe
 when at least one legacy address field is populated. It does not infer departments or tax registrations.
 The repository contains the V3 migration script. A live database's migration state must be checked
 in `public.flyway_schema_history`; repository files alone cannot establish whether it has been
-applied. The development database was reported as already at V3, so verify that history before
-letting Flyway apply V4.
+applied. That earlier development-database observation is historical only; inspect the actual target's
+migration history before permitting Flyway to apply any pending migration.
 
 Newly created businesses default to INR, financial-year start month 4, and ACTIVE. Existing businesses
 receive the same values for currency, financial-year month, and status through migration defaults.

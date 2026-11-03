@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -20,6 +21,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 @RestControllerAdvice
@@ -139,6 +141,18 @@ public class GlobalExceptionHandler {
                 "code", "VALIDATION_ERROR", "errors", Map.of(exception.getParameterName(), "Value is required")));
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, String>> handleParameterTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "code", "VALIDATION_ERROR", "message", "Invalid request parameter"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(Map.of(
+                "code", "UNSUPPORTED_MEDIA_TYPE", "message", "Content type is not supported"));
+    }
+
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<Map<String, Object>> handleMissingHeader(MissingRequestHeaderException exception) {
         return ResponseEntity.badRequest().body(Map.of(
@@ -157,6 +171,12 @@ public class GlobalExceptionHandler {
                 "code", "FILE_TOO_LARGE", "message", "The uploaded request exceeds the allowed size"));
     }
 
+    @ExceptionHandler(ExportTooLargeException.class)
+    public ResponseEntity<Map<String, String>> handleExportTooLarge(ExportTooLargeException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of(
+                "code", "EXPORT_TOO_LARGE", "message", "The requested export exceeds the allowed row limit"));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest().body(Map.of(
@@ -171,7 +191,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleInvalidImport(IllegalArgumentException exception) {
-        return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR", "message", exception.getMessage()));
+        return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR", "message", "Invalid request"));
     }
 
     @ExceptionHandler(NoSuchElementException.class)
@@ -187,7 +207,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpectedException(Exception exception) {
-        log.error("Unexpected error while processing request", exception);
+        // Exception messages and nested causes can contain rejected values, tokens,
+        // SQL parameters, or uploaded row data. Keep the log entry sanitized too.
+        log.error("Unexpected error while processing request (type={})", exception.getClass().getName());
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "code", "INTERNAL_SERVER_ERROR",

@@ -17,7 +17,7 @@ None in this step. PasswordConfig, PasswordResetRequest, PasswordResetToken and 
 - user/dto/CreateUserProfileRequest.java
 - exception/InvalidFirebaseTokenException.java
 - exception/UsernameAlreadyExistsException.java
-- docs/firebase-authentication.md, docs/firebase-development-schema.sql and this report
+- docs/firebase-authentication.md, the former manual schema script (now removed), and this report
 
 ## C. Files modified
 - user/User.java, UserRepository.java, UserService.java, UserController.java
@@ -722,7 +722,8 @@ Only the Firebase Admin SDK was added. No Spring Security starter, BCrypt or oth
 ```
 
 ## L–O. Database, environment, Postman plan and provider linking
-The complete instructions follow. The manual SQL script is [firebase-development-schema.sql](firebase-development-schema.sql). No schema changes have been applied.
+The original manual SQL procedure described below in this historical report has been removed; use
+the current Flyway migration guide. No schema changes have been applied by that historical report.
 
 # Firebase authentication and local profiles
 
@@ -780,9 +781,8 @@ POST accepts only these profile fields:
 Phone may be omitted. Username is 3â€“30 ASCII letters, digits or underscores, and is stored lowercase.
 Email is copied from the verified token and stored lowercase. The token's UID is the identity key.
 UID and username have unique constraints in V1. V4 adds a case-insensitive unique index on email,
-matching lowercase normalization in the service. The legacy manual SQL script is separate and
-incompatible with the Flyway migration path; do not run it on a Flyway-managed database. New profiles
-have no business association.
+matching lowercase normalization in the service. The former manual SQL script was removed because it
+conflicted with V2; Flyway is the supported schema path. New profiles have no business association.
 Client-supplied identity fields are never used; the creation DTO does not contain them.
 
 PATCH accepts only firstName, lastName and phone. Missing/null fields remain unchanged.
@@ -815,12 +815,11 @@ id, company, country, department, phone_number, email, first_name, last_name, pa
 password and phone_number were NOT NULL; firebase_uid and username were absent.
 No password_reset_tokens table was present. No data or schema changes were executed.
 
-This is a historical read-only observation, not a statement about the current database. The manual
-`firebase-development-schema.sql` is incompatible with the current Flyway V1/V2 sequence: it removes
-columns V2 expects and adds an email index absent from V1. Do not run it on a Flyway-managed database
-or baseline a database after running it until one migration path has been designed and reviewed. Use
-the current Firebase and database migration guides for active setup. Never switch to
-`ddl-auto=create` or recreate a database to bypass schema reconciliation.
+This is a historical read-only observation, not a statement about the current database. The former
+manual SQL procedure conflicted with Flyway V1/V2: it removed columns V2 expects and added an email
+index absent from V1. It was removed because no active setup instruction required it. Use the current
+Firebase and database migration guides for active setup. Never switch to `ddl-auto=create` or recreate
+a database to bypass schema reconciliation.
 
 ## Postman test plan
 

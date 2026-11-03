@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface DatasetRowRepository extends JpaRepository<DatasetRow, Long> {
     List<DatasetRow> findAllByDatasetIdOrderByRowNumber(Long datasetId, Pageable pageable);
     long countByDatasetId(Long datasetId);
+    void deleteAllByDatasetId(Long datasetId);
 }

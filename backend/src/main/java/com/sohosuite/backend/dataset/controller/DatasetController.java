@@ -24,4 +24,10 @@ public class DatasetController {
     @GetMapping("/{datasetId}") public Map<String,Object> get(@AuthenticationPrincipal VerifiedFirebaseIdentity identity,@PathVariable Long businessId,@PathVariable Long datasetId){return service.get(identity,businessId,datasetId);}
     @PostMapping("/{datasetId}/confirm") public Map<String,Object> confirm(@AuthenticationPrincipal VerifiedFirebaseIdentity identity,@PathVariable Long businessId,@PathVariable Long datasetId,@RequestBody Map<String,List<String>> body){return service.confirm(identity,businessId,datasetId,body.get("columnNames"));}
     @GetMapping("/{datasetId}/rows") public Map<String,Object> rows(@AuthenticationPrincipal VerifiedFirebaseIdentity identity,@PathVariable Long businessId,@PathVariable Long datasetId,@RequestParam(defaultValue="0") @Min(0) int page,@RequestParam(defaultValue="20") @Min(1) @Max(100) int size){return service.pageRows(identity,businessId,datasetId,page,size);}
+    @PatchMapping("/{datasetId}") public Map<String,Object> update(@AuthenticationPrincipal VerifiedFirebaseIdentity identity,
+            @PathVariable Long businessId, @PathVariable Long datasetId, @RequestBody DatasetMetadataRequest request) {
+        return service.updateMetadata(identity, businessId, datasetId, request.name(), request.description());
+    }
+    @DeleteMapping("/{datasetId}") public void delete(@AuthenticationPrincipal VerifiedFirebaseIdentity identity,
+            @PathVariable Long businessId, @PathVariable Long datasetId) { service.delete(identity, businessId, datasetId); }
 }

@@ -40,7 +40,8 @@ class BusinessModelTests {
         locations = mock(BusinessLocationRepository.class);
         taxes = mock(BusinessTaxRegistrationRepository.class);
         departments = mock(DepartmentRepository.class);
-        service = new BusinessService(businesses, memberships, users, locations, taxes, departments);
+        service = new BusinessService(businesses, memberships, users, locations, taxes, departments,
+                mock(com.sohosuite.backend.activity.service.BusinessActivityService.class));
         owner = new User();
         owner.setId(5L);
         when(users.findForUpdateByFirebaseUid("firebase-owner")).thenReturn(Optional.of(owner));

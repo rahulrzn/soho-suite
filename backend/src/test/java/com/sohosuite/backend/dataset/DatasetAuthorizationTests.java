@@ -32,7 +32,8 @@ class DatasetAuthorizationTests {
         rows = mock(DatasetRowRepository.class);
         memberships = mock(BusinessMembershipRepository.class);
         idempotencyLock = mock(DatasetIdempotencyLock.class);
-        service = new DatasetService(datasets, rows, memberships, idempotencyLock);
+        service = new DatasetService(datasets, rows, memberships, idempotencyLock,
+                mock(com.sohosuite.backend.activity.service.BusinessActivityService.class));
     }
 
     @Test void viewerCannotCreateImport() {

@@ -12,6 +12,7 @@ import com.sohosuite.backend.exception.BusinessAccessDeniedException;
 import com.sohosuite.backend.exception.DatasetIdempotencyConflictException;
 import com.sohosuite.backend.dataset.repository.DatasetIdempotencyLock;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
+import com.sohosuite.backend.activity.service.BusinessActivityService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import java.io.IOException;
@@ -35,15 +36,18 @@ public class DatasetService {
     private final DatasetRowRepository rows;
     private final BusinessMembershipRepository memberships;
     private final DatasetIdempotencyLock idempotencyLock;
+    private final BusinessActivityService activity;
     private final ObjectMapper json = new ObjectMapper();
     @Value("${sohosuite.datasets.max-file-bytes:5242880}") private long maxBytes;
     @Value("${sohosuite.datasets.max-rows:20000}") private int maxRows;
     @Value("${sohosuite.datasets.max-columns:100}") private int maxColumns;
 
     public DatasetService(DatasetRepository datasets, DatasetRowRepository rows,
-            BusinessMembershipRepository memberships, DatasetIdempotencyLock idempotencyLock) {
+            BusinessMembershipRepository memberships, DatasetIdempotencyLock idempotencyLock,
+            BusinessActivityService activity) {
         this.datasets = datasets; this.rows = rows; this.memberships = memberships;
         this.idempotencyLock = idempotencyLock;
+        this.activity = activity;
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
@@ -105,6 +109,8 @@ public class DatasetService {
             List<DatasetRow> entities=new ArrayList<>();
             for(int r=1;r<data.size();r++){DatasetRow row=new DatasetRow();row.setDatasetId(ds.getId());row.setRowNumber(r);row.setValuesJson(json.writeValueAsString(data.get(r)));entities.add(row);}
             rows.saveAll(entities);
+            activity.record(businessId, actor.getUser().getId(), "DATASET_UPLOADED", "DATASET",
+                    ds.getId().toString(), "Dataset uploaded for review");
             return preview(ds);
         } catch (IOException ex) { throw new IllegalArgumentException("Could not parse this file. Check that it is a valid UTF-8 CSV or XLSX workbook"); }
     }
@@ -145,12 +151,36 @@ public class DatasetService {
             if(names==null||names.size()!=cols.size()) throw new IllegalArgumentException("Provide a name for each column");
             Set<String> seen=new HashSet<>();
             for(int i=0;i<names.size();i++){String n=names.get(i)==null?"":names.get(i).trim();if(n.isBlank()||n.length()>120||!seen.add(n.toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Column names must be unique and 1 to 120 characters");cols.get(i).put("name",n);}
-            ds.setColumnsJson(json.writeValueAsString(cols)); ds.setStatus("IMPORTED");ds.setImportedAt(Instant.now());datasets.save(ds); return detail(ds,0,20);
+            ds.setColumnsJson(json.writeValueAsString(cols)); ds.setStatus("IMPORTED");ds.setImportedAt(Instant.now());datasets.save(ds);
+            activity.record(businessId, actor.getUser().getId(), "DATASET_CONFIRMED", "DATASET", ds.getId().toString(), "Dataset import confirmed");
+            return detail(ds,0,20);
         } catch(IOException ex){throw new IllegalStateException(ex);}
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()") @Transactional(Transactional.TxType.SUPPORTS)
     public Map<String,Object> pageRows(VerifiedFirebaseIdentity identity,Long businessId,Long id,int page,int size){member(identity.uid(),businessId);if(page<0||page>20000||size<1||size>100)throw new IllegalArgumentException("Page must be non-negative and size must be 1 to 100");return detail(find(businessId,id),page,size);}
+
+    @PreAuthorize("@firebaseEmailPolicy.isVerified()")
+    public Map<String,Object> updateMetadata(VerifiedFirebaseIdentity identity, Long businessId, Long id,
+            String name, String description) {
+        BusinessMembership actor = member(identity.uid(), businessId); writeRole(actor);
+        Dataset dataset = find(businessId, id);
+        if (name == null || name.isBlank() || name.trim().length() > MAX_NAME) throw new IllegalArgumentException("Name must be 1 to 120 characters");
+        if (description != null && description.length() > 500) throw new IllegalArgumentException("Description must be 500 characters or fewer");
+        dataset.setName(name.trim()); dataset.setDescription(description == null || description.isBlank() ? null : description.trim());
+        datasets.save(dataset);
+        activity.record(businessId, actor.getUser().getId(), "DATASET_METADATA_UPDATED", "DATASET", id.toString(), "Dataset metadata updated");
+        return metadata(dataset);
+    }
+
+    @PreAuthorize("@firebaseEmailPolicy.isVerified()")
+    public void delete(VerifiedFirebaseIdentity identity, Long businessId, Long id) {
+        BusinessMembership actor = member(identity.uid(), businessId); writeRole(actor);
+        Dataset dataset = find(businessId, id);
+        activity.record(businessId, actor.getUser().getId(), "DATASET_DELETED", "DATASET", id.toString(), "Dataset and associated rows deleted");
+        rows.deleteAllByDatasetId(id);
+        datasets.delete(dataset);
+    }
 
     private String detectType(List<List<String>> data,int col){boolean number=true,date=true,seen=false;for(int r=1;r<data.size();r++){String s=col<data.get(r).size()?data.get(r).get(col).trim():"";if(s.isEmpty())continue;seen=true;try{Double.parseDouble(s);}catch(NumberFormatException e){number=false;}try{java.time.LocalDate.parse(s);}catch(Exception e){date=false;}}return !seen?"TEXT":date?"DATE":number?"NUMBER":"TEXT";}
     private String findings(List<List<String>> data,List<Map<String,Object>> cols)throws IOException{long dup=0;Set<String> seen=new HashSet<>();for(int i=1;i<data.size();i++)if(!seen.add(json.writeValueAsString(data.get(i))))dup++;long missing=cols.stream().mapToLong(c->(Integer)c.get("missingValues")).sum();long blank=cols.stream().filter(c->Boolean.TRUE.equals(c.get("blankHeader"))).count();long duplicate=cols.stream().filter(c->Boolean.TRUE.equals(c.get("duplicateHeader"))).count();return json.writeValueAsString(Map.of("missingValues",missing,"duplicateRows",dup,"blankHeaders",blank,"duplicateHeaders",duplicate));}

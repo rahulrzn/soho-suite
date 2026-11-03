@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 
 import com.sohosuite.backend.business.dto.*;
+import com.sohosuite.backend.activity.service.BusinessActivityService;
 import com.sohosuite.backend.business.entity.*;
 import com.sohosuite.backend.business.enums.*;
 import com.sohosuite.backend.business.repository.*;
@@ -32,17 +33,19 @@ public class BusinessService {
     private final BusinessLocationRepository locationRepository;
     private final BusinessTaxRegistrationRepository taxRepository;
     private final DepartmentRepository departmentRepository;
+    private final BusinessActivityService activity;
 
     public BusinessService(BusinessRepository businessRepository, BusinessMembershipRepository membershipRepository,
             UserRepository userRepository,
             BusinessLocationRepository locationRepository, BusinessTaxRegistrationRepository taxRepository,
-            DepartmentRepository departmentRepository) {
+            DepartmentRepository departmentRepository, BusinessActivityService activity) {
         this.businessRepository = businessRepository;
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
         this.locationRepository = locationRepository;
         this.taxRepository = taxRepository;
         this.departmentRepository = departmentRepository;
+        this.activity = activity;
     }
 
     @PreAuthorize("@firebaseEmailPolicy.isVerified()")
@@ -58,6 +61,7 @@ public class BusinessService {
 
         applyRelatedRecords(saved, request);
         syncLegacyAddress(saved, request, true);
+        activity.record(saved.getId(), creator.getId(), "BUSINESS_CREATED", "BUSINESS", saved.getId().toString(), "Business created");
         return toResponse(saved);
     }
 
@@ -80,6 +84,8 @@ public class BusinessService {
     public void deleteBusiness(String firebaseUid, Long businessId) {
         Business business = lockBusiness(businessId);
         requireOwner(firebaseUid, businessId);
+        BusinessMembership actor = membershipRepository.findForFirebaseUserAndBusiness(firebaseUid, businessId)
+                .orElseThrow(BusinessAccessDeniedException::new);
         List<BusinessMembership> memberships = membershipRepository.findAllForBusiness(businessId);
         for (var membership : memberships) {
             User member = membership.getUser();
@@ -88,6 +94,7 @@ public class BusinessService {
             }
         }
         membershipRepository.deleteAll(memberships);
+        activity.record(businessId, actor.getUser().getId(), "BUSINESS_DELETED", "BUSINESS", businessId.toString(), "Business deleted");
         businessRepository.delete(business);
     }
 
@@ -101,6 +108,7 @@ public class BusinessService {
         Business saved = businessRepository.saveAndFlush(business);
         applyRelatedRecords(saved, request);
         syncLegacyAddress(saved, request, false);
+        activity.record(businessId, actor.getUser().getId(), "BUSINESS_UPDATED", "BUSINESS", businessId.toString(), "Business details updated");
         return toResponse(saved);
     }
 
@@ -122,6 +130,8 @@ public class BusinessService {
             throw new MembershipConflictException("User is already a member of this business");
         }
         var membership = createMembership(member, business, request.role());
+        var actor = requireMember(firebaseUid, businessId);
+        activity.record(businessId, actor.getUser().getId(), "MEMBER_ADDED", "MEMBERSHIP", member.getId().toString(), "Business member added");
         if (member.getBusiness() == null) setLegacyDefault(member, business, request.role());
         return BusinessMemberResponse.from(membership);
     }
@@ -135,6 +145,8 @@ public class BusinessService {
         var membership = requireTargetMembership(businessId, userId);
         requireNotOwner(membership);
         membership.setRole(request.role());
+        var actor = requireMember(firebaseUid, businessId);
+        activity.record(businessId, actor.getUser().getId(), "MEMBER_ROLE_UPDATED", "MEMBERSHIP", userId.toString(), "Business member role updated");
         if (membership.getUser().getBusiness() != null
                 && businessId.equals(membership.getUser().getBusiness().getId())) {
             membership.getUser().setBusinessRole(request.role());
@@ -150,6 +162,8 @@ public class BusinessService {
         var membership = requireTargetMembership(businessId, userId);
         requireNotOwner(membership);
         User member = membership.getUser();
+        var actor = requireMember(firebaseUid, businessId);
+        activity.record(businessId, actor.getUser().getId(), "MEMBER_REMOVED", "MEMBERSHIP", userId.toString(), "Business member removed");
         membershipRepository.delete(membership);
         if (member.getBusiness() != null && businessId.equals(member.getBusiness().getId())) {
             setLegacyDefaultFromRemainingMembership(member, businessId);

@@ -76,9 +76,9 @@ POST accepts only these profile fields:
 Phone may be omitted. Username is 3–30 ASCII letters, digits or underscores, and is stored lowercase.
 Email is copied from the verified token and stored lowercase. The token's UID is the identity key.
 UID and username have unique constraints in V1. V4 adds a case-insensitive unique index on email,
-matching lowercase normalization in the service. The legacy manual development SQL is separate and
-incompatible with the Flyway migration path; do not run it on a Flyway-managed database. New profiles
-have no business association.
+matching lowercase normalization in the service. The former manual development SQL was removed
+because it conflicted with V2; Flyway is the supported schema path. New profiles have no business
+association.
 Client-supplied identity fields are never used; the creation DTO does not contain them.
 
 PATCH accepts only firstName, lastName and phone. Missing/null fields remain unchanged.
@@ -112,14 +112,16 @@ password and phone_number were NOT NULL; firebase_uid and username were absent.
 No password_reset_tokens table was present. No data or schema changes were executed.
 
 This is a historical read-only schema observation, not a statement about the current database. The
-manual `firebase-development-schema.sql` changes the schema: it removes legacy columns, adds Firebase
-identity fields and indexes, and relaxes phone nullability. It is **not compatible with the current
-Flyway V1/V2 sequence**: it removes `phone_number` and `password`, which V2 expects, and adds an email
-unique index absent from V1. Do not run that script on a database managed by these Flyway migrations,
-or baseline a database after running it, until a single migration path has been designed and reviewed.
-If it has already been run, audit the live schema and reconcile migration history before starting the
-backend. Never switch to `ddl-auto=create` or recreate a database to bypass this mismatch. For
-populated environments, plan UID/username backfill and duplicate resolution explicitly.
+repository's supported setup is Flyway: use the complete ordered migration sequence on a genuinely
+empty database, or continue only from verified Flyway history. A former manual Firebase SQL script was
+removed because its only documented uses were historical and it conflicted with V2: it dropped
+`phone_number` and `password`, which V2 expects to exist, and created an email unique index that V1
+does not create. Running that procedure before V2 would make Flyway fail; running it after any Flyway
+migration would leave history inconsistent with the schema. There is no supported manual-script setup path.
+If it may have been run on an existing environment, stop and review that environment's schema and
+migration history before startup; this repository cannot establish whether it was run. Never switch
+to `ddl-auto=create` or recreate a database to bypass reconciliation. For populated environments,
+plan UID/username backfill and duplicate resolution explicitly.
 
 ## Postman test plan
 
