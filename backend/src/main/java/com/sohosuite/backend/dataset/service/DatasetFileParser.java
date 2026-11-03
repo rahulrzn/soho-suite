@@ -60,9 +60,9 @@ final class DatasetFileParser {
     private static List<List<String>> sheet(byte[] xml,List<String> shared,int maxRows,int maxColumns){
         List<List<String>> out=new ArrayList<>();try{XMLStreamReader r=factory().createXMLStreamReader(new ByteArrayInputStream(xml));while(r.hasNext())if(r.next()==XMLStreamConstants.START_ELEMENT&&r.getLocalName().equals("row")){
             List<String> row=new ArrayList<>();while(r.hasNext()){int event=r.next();if(event==XMLStreamConstants.END_ELEMENT&&r.getLocalName().equals("row"))break;if(event!=XMLStreamConstants.START_ELEMENT||!r.getLocalName().equals("c"))continue;
-            String ref=r.getAttributeValue(null,"r"),type=r.getAttributeValue(null,"t");int col=column(ref,maxColumns);String value="",formula=null;
-            while(r.hasNext()){int ce=r.next();if(ce==XMLStreamConstants.START_ELEMENT&&r.getLocalName().equals("v"))value=r.getElementText();else if(ce==XMLStreamConstants.START_ELEMENT&&r.getLocalName().equals("f"))formula=r.getElementText();else if(ce==XMLStreamConstants.START_ELEMENT&&r.getLocalName().equals("t"))value=r.getElementText();else if(ce==XMLStreamConstants.END_ELEMENT&&r.getLocalName().equals("c"))break;}
-            while(row.size()<=col)row.add("");if("s".equals(type)){int ix=Integer.parseInt(value);if(ix<0||ix>=shared.size())throw new IllegalArgumentException("Invalid XLSX shared string");value=shared.get(ix);}else if("b".equals(type))value="1".equals(value)?"TRUE":"FALSE";else if(formula!=null)value="="+formula;row.set(col,value);
+            String ref=r.getAttributeValue(null,"r"),type=r.getAttributeValue(null,"t");int col=column(ref,maxColumns);String value="";
+            while(r.hasNext()){int ce=r.next();if(ce==XMLStreamConstants.START_ELEMENT&&r.getLocalName().equals("v"))value=r.getElementText();else if(ce==XMLStreamConstants.START_ELEMENT&&r.getLocalName().equals("t"))value=r.getElementText();else if(ce==XMLStreamConstants.END_ELEMENT&&r.getLocalName().equals("c"))break;}
+            while(row.size()<=col)row.add("");if("s".equals(type)){int ix=Integer.parseInt(value);if(ix<0||ix>=shared.size())throw new IllegalArgumentException("Invalid XLSX shared string");value=shared.get(ix);}else if("b".equals(type))value="1".equals(value)?"TRUE":"FALSE";row.set(col,value);
             }
             if(out.size()>=maxRows+1)throw new IllegalArgumentException("File exceeds the 20,000 row limit");out.add(row);
         }return out;}catch(XMLStreamException|NumberFormatException e){throw new IllegalArgumentException("XLSX worksheet is malformed");}

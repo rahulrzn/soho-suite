@@ -20,6 +20,7 @@ public class Dataset {
     @Column(name="columns_json", nullable=false, columnDefinition="text") private String columnsJson;
     @Column(name="findings_json", nullable=false, columnDefinition="text") private String findingsJson;
     @Column(name="idempotency_key", nullable=false, length=80) private String idempotencyKey;
+    @Column(name="request_fingerprint", length=64) private String requestFingerprint;
     @Column(name="created_at", nullable=false) private Instant createdAt;
     @Column(name="imported_at") private Instant importedAt;
 }

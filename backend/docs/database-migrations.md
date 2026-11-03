@@ -8,7 +8,9 @@ update, or validate the database schema. Database connection credentials continu
 
 The migration sequence is `V1__initial_schema.sql`, `V2__relax_legacy_user_columns.sql`,
 `V3__expand_business_model.sql`, `V4__enforce_case_insensitive_user_email_uniqueness.sql`,
-`V5__add_dataset_imports.sql`, and `V6__add_business_memberships.sql`. On a genuinely empty
+`V5__add_dataset_imports.sql`, `V6__add_business_memberships.sql`, and
+`V7__add_dataset_request_fingerprint.sql`, and `V8__create_dataset_analytics_config.sql`.
+On a genuinely empty
 database, application startup applies the migrations in order. Startup therefore
 changes the database on a fresh installation. Do not run the backend against an existing non-empty
 schema without confirming its Flyway history and schema state.
@@ -40,6 +42,10 @@ Migrations below describe expected schema transitions, not the state of any part
 - **V6** creates canonical per-business memberships, validates legacy assignments before copying
   them, checks the copied count, and retains `users.business_id` / `users.business_role` as a
   default-business compatibility projection. Authorization must use the membership table.
+- **V7** adds a nullable SHA-256 request fingerprint to dataset imports. It remains nullable for
+  pre-V7 imports because their source files were not retained and cannot be fingerprinted reliably.
+- **V8** stores the explicitly confirmed analytics dataset and column mappings for each business.
+  It references the selected business and dataset and records the confirmed currency.
 
 The application lowercases new emails. The index protects concurrent inserts and other writers.
 Hibernate schema validation is disabled (`ddl-auto=none`); Flyway owns schema changes. Before V4 on

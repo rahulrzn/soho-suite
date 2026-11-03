@@ -12,6 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -136,6 +139,24 @@ public class GlobalExceptionHandler {
                 "code", "VALIDATION_ERROR", "errors", Map.of(exception.getParameterName(), "Value is required")));
     }
 
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingHeader(MissingRequestHeaderException exception) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "code", "VALIDATION_ERROR", "errors", Map.of(exception.getHeaderName(), "Header is required")));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingPart(MissingServletRequestPartException exception) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "code", "VALIDATION_ERROR", "errors", Map.of(exception.getRequestPartName(), "File part is required")));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleUploadTooLarge(MaxUploadSizeExceededException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of(
+                "code", "FILE_TOO_LARGE", "message", "The uploaded request exceeds the allowed size"));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest().body(Map.of(
@@ -156,6 +177,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<Map<String, String>> handleMissingDataset(NoSuchElementException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("code", "NOT_FOUND", "message", "Dataset not found"));
+    }
+
+    @ExceptionHandler(DatasetIdempotencyConflictException.class)
+    public ResponseEntity<Map<String, String>> handleIdempotencyConflict(DatasetIdempotencyConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                "code", "IDEMPOTENCY_CONFLICT", "message", exception.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

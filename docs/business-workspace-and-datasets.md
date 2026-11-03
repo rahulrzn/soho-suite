@@ -10,7 +10,7 @@ Dataset metadata is stored in `public.dataset`; each imported row is stored sepa
 
 ## Dataset lifecycle and limits
 
-`PENDING_REVIEW` is created after server parsing and preview analysis. `POST .../{datasetId}/confirm` validates unique, non-empty column names and transitions it to `IMPORTED`. Repeated uploads with the same `Idempotency-Key` in a business return the existing session. The frontend requires an explicit confirmation.
+`PENDING_REVIEW` is created after server parsing and preview analysis. `POST .../{datasetId}/confirm` validates unique, non-empty column names and transitions it to `IMPORTED`. Upload retries must reuse the same `Idempotency-Key`; the backend returns the original preview only when the file bytes and normalized import details match. Reusing a key with different content or parameters returns `409 IDEMPOTENCY_CONFLICT`. Keys are scoped to a business, and the caller must still have upload permission for that business. Pre-V7 imports have no stored request fingerprint, so their original payload cannot be verified and reusing those keys returns a conflict. The frontend retains a pending key across retries in the current tab/session and offers an explicit new-import action after a conflict. The UI requires explicit import confirmation.
 
 CSV and XLSX are supported. Uploads are limited to 5 MiB, 20,000 data rows, and 100 columns. XLSX imports read the first worksheet; formula cells are read as displayed text without formula evaluation. The parser uses Java UTF-8 and ZIP/XML APIs with DTD/external entities disabled; it does not extract archive paths or evaluate formulas. XLSX archives are limited to 2,000 entries and 40 MiB expanded content. The preview is limited to 20 rows and row pages to 100 records. Missing values, duplicate rows, blank headers, duplicate headers, and basic text/number/date type guesses are reported. Header names can be changed during review; data values are not silently rewritten.
 
@@ -32,7 +32,7 @@ Responses contain `id`, `name`, `description`, `originalFilename`, `fileType`, `
 
 ## Migration and local setup
 
-Flyway migration `V5__add_dataset_imports.sql` creates dataset metadata and row tables with business and dataset foreign keys, state and format checks, idempotency uniqueness, and page lookup indexes. Existing migrations are unchanged; Hibernate DDL remains disabled.
+Flyway migration `V5__add_dataset_imports.sql` creates dataset metadata and row tables with business and dataset foreign keys, state and format checks, business-scoped idempotency uniqueness, and page lookup indexes. `V7__add_dataset_request_fingerprint.sql` stores the request fingerprint used to reject key reuse with different upload content. Existing migrations are unchanged; Hibernate DDL remains disabled.
 
 Configure `DB_USERNAME`, `DB_PASSWORD`, Firebase Admin configuration, and `CORS_ALLOWED_ORIGINS` as required by the existing backend setup. Multipart and parser limits are in `application.properties`. The frontend uses `VITE_API_BASE_URL` (default `http://localhost:8080`). No credentials or uploaded files should be committed.
 

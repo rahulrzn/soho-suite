@@ -9,6 +9,7 @@ import com.sohosuite.backend.business.enums.BusinessRole;
 import com.sohosuite.backend.business.repository.BusinessMembershipRepository;
 import com.sohosuite.backend.dataset.repository.DatasetRepository;
 import com.sohosuite.backend.dataset.repository.DatasetRowRepository;
+import com.sohosuite.backend.dataset.repository.DatasetIdempotencyLock;
 import com.sohosuite.backend.dataset.service.DatasetService;
 import com.sohosuite.backend.exception.BusinessAccessDeniedException;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
@@ -22,6 +23,7 @@ class DatasetAuthorizationTests {
     private DatasetRepository datasets;
     private DatasetRowRepository rows;
     private BusinessMembershipRepository memberships;
+    private DatasetIdempotencyLock idempotencyLock;
     private DatasetService service;
     private final VerifiedFirebaseIdentity identity = new VerifiedFirebaseIdentity("firebase-user", "owner@example.test", true);
 
@@ -29,7 +31,8 @@ class DatasetAuthorizationTests {
         datasets = mock(DatasetRepository.class);
         rows = mock(DatasetRowRepository.class);
         memberships = mock(BusinessMembershipRepository.class);
-        service = new DatasetService(datasets, rows, memberships);
+        idempotencyLock = mock(DatasetIdempotencyLock.class);
+        service = new DatasetService(datasets, rows, memberships, idempotencyLock);
     }
 
     @Test void viewerCannotCreateImport() {

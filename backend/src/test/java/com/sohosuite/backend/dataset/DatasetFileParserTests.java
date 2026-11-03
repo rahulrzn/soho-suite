@@ -29,6 +29,14 @@ class DatasetFileParserTests {
         assertEquals(List.of(List.of("Item","Quantity"),List.of("Tea","4")),DatasetFileParser.parse(zip(xml),"XLSX",20,10));
     }
 
+    @Test void usesCachedFormulaValueWithoutEvaluatingFormula() throws Exception {
+        Map<String,String> xml=Map.of(
+                "xl/workbook.xml","<workbook xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"data\" r:id=\"rId1\"/></sheets></workbook>",
+                "xl/_rels/workbook.xml.rels","<Relationships><Relationship Id=\"rId1\" Target=\"worksheets/sheet1.xml\"/></Relationships>",
+                "xl/worksheets/sheet1.xml","<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><v>Amount</v></c></row><row r=\"2\"><c r=\"A2\"><f>B2*C2</f><v>42</v></c></row></sheetData></worksheet>");
+        assertEquals(List.of(List.of("Amount"),List.of("42")),DatasetFileParser.parse(zip(xml),"XLSX",20,10));
+    }
+
     private byte[] zip(Map<String,String> files)throws IOException{
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();
         try(ZipOutputStream out=new ZipOutputStream(bytes)){for(var entry:files.entrySet()){out.putNextEntry(new ZipEntry(entry.getKey()));out.write(entry.getValue().getBytes(StandardCharsets.UTF_8));out.closeEntry();}}
