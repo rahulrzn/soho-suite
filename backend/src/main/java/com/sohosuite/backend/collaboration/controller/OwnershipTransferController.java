@@ -35,7 +35,7 @@ public class OwnershipTransferController {
 
     @PostMapping("/api/ownership-transfers/accept")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void accept(@AuthenticationPrincipal VerifiedFirebaseIdentity identity, @RequestBody TokenRequest request) {
+    public void accept(@AuthenticationPrincipal VerifiedFirebaseIdentity identity, @Valid @RequestBody TokenRequest request) {
         service.acceptOwnershipTransfer(identity, request.token());
     }
 

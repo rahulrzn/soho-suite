@@ -64,7 +64,6 @@ type Profile = {
   email?: string
 }
 
-const base = getDefaultApiBaseUrl()
 const ACTIVE_BUSINESS_KEY = 'sohosuite.active-business-id'
 
 function readActiveBusinessId(): number | null {
@@ -96,7 +95,7 @@ function sessionUploadStore() {
 }
 
 async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
-  const result = await apiRequest(base, path, options)
+  const result = await apiRequest(getDefaultApiBaseUrl(), path, options)
   if (result.status < 200 || result.status >= 300) {
     const body = result.body as { message?: string; code?: string } | null
     throw new Error(body?.message || body?.code || `Request failed (${result.status})`)
@@ -477,7 +476,7 @@ export default function WorkspaceApp() {
         storage: sessionUploadStore(),
       })
 
-      const response = await fetch(`${base}/api/businesses/${requestBusinessId}/datasets`, {
+      const response = await fetch(`${getDefaultApiBaseUrl()}/api/businesses/${requestBusinessId}/datasets`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Idempotency-Key': key },
         body: fd,

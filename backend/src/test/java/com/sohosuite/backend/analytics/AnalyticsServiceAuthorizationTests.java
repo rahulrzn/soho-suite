@@ -25,6 +25,7 @@ import com.sohosuite.backend.dataset.repository.DatasetRepository;
 import com.sohosuite.backend.dataset.repository.DatasetRowRepository;
 import com.sohosuite.backend.exception.BusinessAccessDeniedException;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
+import com.sohosuite.backend.user.entity.User;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -202,6 +203,9 @@ class AnalyticsServiceAuthorizationTests {
         business.setBusinessCurrency("USD");
         BusinessMembership membership = new BusinessMembership();
         membership.setBusiness(business);
+        User user = new User();
+        user.setId(1L);
+        membership.setUser(user);
         membership.setRole(role);
         when(memberships.findForFirebaseUserAndBusiness(FIREBASE_UID, BUSINESS_ID))
                 .thenReturn(Optional.of(membership));

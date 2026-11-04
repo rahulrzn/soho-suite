@@ -49,7 +49,7 @@ public class BusinessInvitationController {
 
     @PostMapping("/api/invitations/accept")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void accept(@AuthenticationPrincipal VerifiedFirebaseIdentity identity, @RequestBody TokenRequest request) {
+    public void accept(@AuthenticationPrincipal VerifiedFirebaseIdentity identity, @Valid @RequestBody TokenRequest request) {
         service.acceptInvitation(identity, request.token());
     }
 

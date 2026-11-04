@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
+import org.springframework.beans.BeanUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -63,8 +65,16 @@ public class GlobalExceptionHandler {
                 .getFieldErrors()
                 .forEach(error -> errors.putIfAbsent(requestFieldName(exception.getBindingResult().getTarget(), error.getField()), error.getDefaultMessage()));
 
+        Class<?> parameterType = exception.getParameter().getParameterType();
+        boolean requestParameter = exception.getParameter().hasParameterAnnotation(RequestParam.class)
+                || BeanUtils.isSimpleValueType(parameterType);
+        String message = requestParameter
+                ? "Invalid request parameter"
+                : "Request validation failed";
+
         return ResponseEntity.badRequest().body(Map.of(
                 "code", "VALIDATION_ERROR",
+                "message", message,
                 "errors", errors));
     }
 
@@ -130,15 +140,20 @@ public class GlobalExceptionHandler {
             String name = result.getMethodParameter().getParameterName();
             result.getResolvableErrors().forEach(error -> errors.putIfAbsent(
                     name == null ? "request" : name,
-                    error.getDefaultMessage() == null ? "Invalid value" : error.getDefaultMessage()));
+                    "Invalid value"));
         });
-        return ResponseEntity.badRequest().body(Map.of("code", "VALIDATION_ERROR", "errors", errors));
+        return ResponseEntity.badRequest().body(Map.of(
+                "code", "VALIDATION_ERROR",
+                "message", "Invalid request parameter",
+                "errors", errors));
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<Map<String, Object>> handleMissingParameter(MissingServletRequestParameterException exception) {
         return ResponseEntity.badRequest().body(Map.of(
-                "code", "VALIDATION_ERROR", "errors", Map.of(exception.getParameterName(), "Value is required")));
+                "code", "VALIDATION_ERROR",
+                "message", "Invalid request parameter",
+                "errors", Map.of(exception.getParameterName(), "Value is required")));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -156,13 +171,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<Map<String, Object>> handleMissingHeader(MissingRequestHeaderException exception) {
         return ResponseEntity.badRequest().body(Map.of(
-                "code", "VALIDATION_ERROR", "errors", Map.of(exception.getHeaderName(), "Header is required")));
+                "code", "VALIDATION_ERROR",
+                "message", "A required request header is missing",
+                "errors", Map.of(exception.getHeaderName(), "Header is required")));
     }
 
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<Map<String, Object>> handleMissingPart(MissingServletRequestPartException exception) {
         return ResponseEntity.badRequest().body(Map.of(
-                "code", "VALIDATION_ERROR", "errors", Map.of(exception.getRequestPartName(), "File part is required")));
+                "code", "VALIDATION_ERROR",
+                "message", "A required request part is missing",
+                "errors", Map.of(exception.getRequestPartName(), "File part is required")));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -180,7 +199,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest().body(Map.of(
-                "code", "VALIDATION_ERROR", "errors", Map.of("request", "Invalid JSON request")));
+                "code", "VALIDATION_ERROR",
+                "message", "Invalid JSON request",
+                "errors", Map.of("request", "Invalid JSON request")));
     }
 
     @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})

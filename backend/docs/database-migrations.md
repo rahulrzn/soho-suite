@@ -82,9 +82,11 @@ already managed by Flyway.
 
 Before baselining, take and verify a database backup. Confirm the target is `sohosuite`, the schema is
 `public`, the only application tables are the expected V1 tables, the tables are empty, and every
-column, type, nullability, default, identity, constraint, and index matches V1. Also confirm the
-Firebase compatibility SQL described in `firebase-authentication.md` has not been applied. `baseline`
-records a version; it does not compare the existing schema with the migration file. If the schema
+column, type, nullability, default, identity, constraint, and index matches V1. Also inspect whether
+any manual schema changes outside Flyway were applied. The removed Firebase SQL is a historical
+compatibility procedure; its presence in old documentation does not establish whether it was run on
+any database. If manual changes were made, inspect their actual effects and review the migration plan
+before baselining. `baseline` records a version; it does not compare the existing schema with the migration file. If the schema
 does not match V1 exactly, stop and reconcile the migration plan. Emptiness alone is not enough.
 
 The following PowerShell example writes the backup outside the repository, prompts for the database

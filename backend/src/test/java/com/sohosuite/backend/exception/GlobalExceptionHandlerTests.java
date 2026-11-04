@@ -19,6 +19,9 @@ import com.sohosuite.backend.inventory.controller.InventoryController;
 import com.sohosuite.backend.inventory.service.InventoryService;
 import com.sohosuite.backend.expense.controller.ExpenseController;
 import com.sohosuite.backend.expense.service.ExpenseService;
+import com.sohosuite.backend.collaboration.controller.BusinessInvitationController;
+import com.sohosuite.backend.collaboration.controller.OwnershipTransferController;
+import com.sohosuite.backend.collaboration.service.BusinessCollaborationService;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -122,6 +125,22 @@ class GlobalExceptionHandlerTests {
                         .content("{\"name\":\" \",\"openingQuantity\":-1}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         verifyNoInteractions(inventory);
+    }
+
+    @Test
+    void invitationAndTransferAcceptRequireNonBlankTokens() throws Exception {
+        BusinessCollaborationService service = mock(BusinessCollaborationService.class);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                new BusinessInvitationController(service), new OwnershipTransferController(service))
+                .setControllerAdvice(handler).build();
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/api/invitations/accept").contentType(MediaType.APPLICATION_JSON).content("{\"token\":\" \"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/api/ownership-transfers/accept").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(service);
     }
 
     @Test

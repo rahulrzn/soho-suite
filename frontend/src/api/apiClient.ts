@@ -1,4 +1,5 @@
 import { getIdToken } from '../auth/authService'
+import { resolveApiBaseUrl } from './apiConfig'
 
 export type ApiRequestOptions = {
   method?: string
@@ -16,10 +17,8 @@ export type ApiResult = {
   headers: Record<string, string>
 }
 
-const defaultApiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
-
 export function getDefaultApiBaseUrl(): string {
-  return defaultApiBaseUrl
+  return resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
 }
 
 export async function apiRequest(
@@ -36,7 +35,8 @@ export async function apiRequest(
     headers.Authorization = `Bearer ${token}`
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}${path}`
+  const configuredBaseUrl = resolveApiBaseUrl(baseUrl)
+  const url = `${configuredBaseUrl}/${path.replace(/^\/+/, '')}`
   const startedAt = performance.now()
   let response: Response
   try {

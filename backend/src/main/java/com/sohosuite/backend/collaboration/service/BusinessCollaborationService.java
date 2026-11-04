@@ -18,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -55,7 +57,7 @@ public class BusinessCollaborationService {
         Instant expiry = Instant.now().plus(7, ChronoUnit.DAYS);
         try {
             Long id = jdbc.queryForObject("insert into business_invitation (business_id, invited_email, invited_role, token_hash, status, expires_at, created_by) values (?, ?, ?, ?, 'PENDING', ?, ?) returning id",
-                    Long.class, businessId, email, request.role().name(), hash(token), expiry, actor.getUser().getId());
+                    Long.class, businessId, email, request.role().name(), hash(token), databaseTime(expiry), actor.getUser().getId());
             activity.record(businessId, actor.getUser().getId(), "INVITATION_CREATED", "INVITATION", id.toString(), "Business invitation created");
             return new InvitationResponse(id, email, request.role().name(), "PENDING", expiry, token, "/accept-invitation?token=" + token);
         } catch (DataIntegrityViolationException duplicate) {
@@ -86,7 +88,8 @@ public class BusinessCollaborationService {
         }
         String token = token();
         Instant expiry = Instant.now().plus(7, ChronoUnit.DAYS);
-        jdbc.update("update business_invitation set token_hash=?, expires_at=?, updated_at=CURRENT_TIMESTAMP where id=?", hash(token), expiry, invitationId);
+        jdbc.update("update business_invitation set token_hash=?, expires_at=?, updated_at=CURRENT_TIMESTAMP where id=?",
+                hash(token), databaseTime(expiry), invitationId);
         activity.record(businessId, actor.getUser().getId(), "INVITATION_RESENT", "INVITATION", Long.toString(invitationId), "Business invitation token rotated");
         return new InvitationResponse(invitationId, row.email, row.role, "PENDING", expiry, token, "/accept-invitation?token=" + token);
     }
@@ -127,7 +130,7 @@ public class BusinessCollaborationService {
         Long id;
         try {
             id = jdbc.queryForObject("insert into business_ownership_transfer (business_id,current_owner_user_id,new_owner_user_id,token_hash,status,expires_at) values (?,?,?,?,'PENDING',?) returning id",
-                    Long.class, businessId, actor.getUser().getId(), proposedOwnerId, hash(token), expiry);
+                    Long.class, businessId, actor.getUser().getId(), proposedOwnerId, hash(token), databaseTime(expiry));
         } catch (DataIntegrityViolationException pending) {
             throw new MembershipConflictException("An ownership transfer is already pending");
         }
@@ -209,6 +212,7 @@ public class BusinessCollaborationService {
     }
 
     private String token() { byte[] bytes = new byte[32]; random.nextBytes(bytes); return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes); }
+    private static OffsetDateTime databaseTime(Instant instant) { return instant.atOffset(ZoneOffset.UTC); }
     private static String hash(String token) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8))); }
         catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }

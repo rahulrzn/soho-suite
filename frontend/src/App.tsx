@@ -12,7 +12,6 @@ import {
   signUpWithEmail,
 } from './auth/authService'
 import { auth } from './firebase'
-import WorkspaceApp from './WorkspaceApp'
 import {
   apiRequest,
   getDefaultApiBaseUrl,
@@ -45,7 +44,7 @@ function describeBody(body: unknown): string {
   return typeof body === 'string' ? body : JSON.stringify(body, null, 2)
 }
 
-function IntegrationDashboard() {
+export function IntegrationDashboard() {
   const [user, setUser] = useState<User | null>(() => getCurrentFirebaseUser())
   const [apiBaseUrl, setApiBaseUrl] = useState(getDefaultApiBaseUrl())
   const [email, setEmail] = useState('')
@@ -452,7 +451,5 @@ function IntegrationDashboard() {
 }
 
 export default function App() {
-  return new URLSearchParams(window.location.search).get('tools') === 'integration'
-    ? <IntegrationDashboard />
-    : <WorkspaceApp />
+  return <IntegrationDashboard />
 }

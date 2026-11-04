@@ -1,27 +1,10 @@
-import { apiRequest, getDefaultApiBaseUrl } from './apiClient'
+import { apiRequest } from './client'
+import type { UserProfile } from './models'
 
-export type CreateUserProfile = {
-  username: string
-  firstName: string
-  lastName: string
-  phone?: string
-}
+export type CreateProfile = { username: string; firstName: string; lastName: string; phone?: string }
+export type UpdateProfile = Partial<Pick<CreateProfile, 'firstName' | 'lastName' | 'phone'>>
 
-export async function createUserProfile(profile: CreateUserProfile): Promise<unknown> {
-  const result = await apiRequest(getDefaultApiBaseUrl(), '/api/users/profile', {
-    method: 'POST',
-    body: profile,
-  })
-
-  if (result.status < 200 || result.status >= 300) {
-    const responseBody = result.body as { message?: unknown; code?: unknown } | null
-    const message = typeof responseBody?.message === 'string'
-      ? responseBody.message
-      : typeof responseBody?.code === 'string'
-        ? responseBody.code
-        : 'Failed to create user profile'
-    throw new Error(message)
-  }
-
-  return result.body
-}
+export const getMyProfile = () => apiRequest<UserProfile>('/api/users/me')
+export const createProfile = (body: CreateProfile) => apiRequest<UserProfile>('/api/users/profile', { method: 'POST', json: body })
+export const updateProfile = (body: UpdateProfile) => apiRequest<UserProfile>('/api/users/me/profile', { method: 'PATCH', json: body })
+export const checkUsername = (username: string) => apiRequest<{ available: boolean }>(`/api/users/check-username?username=${encodeURIComponent(username)}`)

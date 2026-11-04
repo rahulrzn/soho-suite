@@ -1,6 +1,6 @@
 # SOHO Suite
 
-SOHO Suite is an early-stage small-business workspace for managing business profiles, team access, and imported business data. The current MVP supports Firebase sign-in, business and membership management, and CSV/XLSX dataset upload, review, and browsing. The broader analytics platform described in the requirements is a product direction; dashboards, forecasting, and automated analytics are not yet implemented.
+SOHO Suite is an early-stage small-business workspace for managing business profiles, team access, imported datasets, sales analytics, expenses, and inventory. Firebase Authentication handles sign-in; the Spring Boot API remains the source of truth for business data, permissions, and validation.
 
 ## Repository layout
 
@@ -45,7 +45,7 @@ VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_FIREBASE_MEASUREMENT_ID=...
-VITE_API_BASE_URL=http://localhost:8080
+VITE_API_BASE_URL=<your-backend-base-url>
 ```
 
 Use the values from your Firebase project settings. `VITE_FIREBASE_MEASUREMENT_ID` may be omitted if Analytics is not configured. These are frontend Firebase configuration values, not Admin credentials.
@@ -75,7 +75,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by Vite (normally `http://localhost:5173`). The API workbench/integration dashboard is available at `/?tools=integration`.
+Open the local URL printed by Vite (normally `http://localhost:5173`). The API integration dashboard is available at `/tools/integration`.
 
 ## Main capabilities
 
@@ -84,6 +84,9 @@ Open the local URL printed by Vite (normally `http://localhost:5173`). The API w
 - Business profile creation, editing, and membership/role management (`OWNER`, `MANAGER`, `VIEWER`).
 - CSV and XLSX uploads with a review step, basic data-quality findings, editable column names, and paginated dataset rows.
 - Role-scoped access: owners and managers can upload and confirm datasets; viewers can read them.
+- Dataset sales analytics with a confirmed column mapping, date filters, backend health score, and CSV exports.
+- Business activity, expense tracking and summaries, inventory items and movements, and CSV exports.
+- Owner-managed invitations and ownership transfer requests using one-time links; no invitation email is sent automatically.
 - An integration dashboard for exercising API requests and inspecting responses. Authorization headers and sensitive response fields are redacted in its inspector.
 
 Dataset imports currently accept files up to 5 MiB, 20,000 data rows, and 100 columns. XLSX imports use the first worksheet. Original uploaded files are not retained. Details and current API routes are documented in [business workspace and dataset imports](docs/business-workspace-and-datasets.md).

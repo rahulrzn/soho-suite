@@ -9,6 +9,7 @@ import com.sohosuite.backend.analytics.service.AnalyticsService;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
+import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,7 +33,7 @@ public class AnalyticsController {
         this.healthScoreService = healthScoreService;
     }
 
-    @PutMapping("/dataset-config")
+    @PutMapping(value = "/dataset-config", consumes = MediaType.APPLICATION_JSON_VALUE)
     public AnalyticsDatasetConfigResponse configureDataset(
             @AuthenticationPrincipal VerifiedFirebaseIdentity identity,
             @PathVariable Long businessId,

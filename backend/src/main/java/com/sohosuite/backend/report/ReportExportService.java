@@ -73,8 +73,10 @@ public class ReportExportService {
         List<List<?>> rows = new ArrayList<>();
         rows.add(List.of("id", "date", "amount", "currency", "category", "description", "reference"));
         jdbc.query("select id,expense_date,amount,currency,category,description,reference" + where + " order by expense_date,id limit ?",
-                rs -> rows.add(List.of(rs.getLong("id"), rs.getDate("expense_date").toLocalDate(), rs.getBigDecimal("amount"),
-                        rs.getString("currency"), rs.getString("category"), nullSafe(rs.getString("description")), nullSafe(rs.getString("reference")))),
+                rs -> {
+                    rows.add(List.of(rs.getLong("id"), rs.getDate("expense_date").toLocalDate(), rs.getBigDecimal("amount"),
+                            rs.getString("currency"), rs.getString("category"), nullSafe(rs.getString("description")), nullSafe(rs.getString("reference"))));
+                },
                 businessId, from, from, to, to, MAX_EXPENSE_ROWS + 1);
         enforceLimit(rows.size() - 1L, MAX_EXPENSE_ROWS);
         return csv(rows);
@@ -92,8 +94,10 @@ public class ReportExportService {
         List<List<?>> rows = new ArrayList<>();
         rows.add(List.of("from", "to", "currency", "category", "amount"));
         jdbc.query("select currency,category,sum(amount) amount" + where + " group by currency,category order by currency,category limit ?",
-                rs -> rows.add(List.of(from == null ? "" : from, to == null ? "" : to,
-                        rs.getString("currency"), rs.getString("category"), rs.getBigDecimal("amount"))),
+                rs -> {
+                    rows.add(List.of(from == null ? "" : from, to == null ? "" : to,
+                            rs.getString("currency"), rs.getString("category"), rs.getBigDecimal("amount")));
+                },
                 businessId, from, from, to, to, 1_001);
         enforceLimit(rows.size() - 1L, 1_000);
         return csv(rows);
@@ -108,8 +112,10 @@ public class ReportExportService {
         List<List<?>> rows = new ArrayList<>();
         rows.add(List.of("id", "name", "sku", "description", "active", "quantity"));
         jdbc.query("select id,name,sku,description,active,quantity from inventory_item where business_id=? order by id limit ?",
-                rs -> rows.add(List.of(rs.getLong("id"), rs.getString("name"), nullSafe(rs.getString("sku")),
-                        nullSafe(rs.getString("description")), rs.getBoolean("active"), rs.getBigDecimal("quantity"))), businessId, MAX_INVENTORY_ROWS + 1);
+                rs -> {
+                    rows.add(List.of(rs.getLong("id"), rs.getString("name"), nullSafe(rs.getString("sku")),
+                            nullSafe(rs.getString("description")), rs.getBoolean("active"), rs.getBigDecimal("quantity")));
+                }, businessId, MAX_INVENTORY_ROWS + 1);
         enforceLimit(rows.size() - 1L, MAX_INVENTORY_ROWS);
         return csv(rows);
     }
@@ -127,9 +133,11 @@ public class ReportExportService {
         List<List<?>> rows = new ArrayList<>();
         rows.add(List.of("id", "itemId", "type", "quantityDelta", "resultingQuantity", "reason", "occurredAt"));
         jdbc.query("select id,item_id,movement_type,quantity_delta,resulting_quantity,reason,occurred_at" + where + " order by occurred_at,id limit ?",
-                rs -> rows.add(List.of(rs.getLong("id"), rs.getLong("item_id"), rs.getString("movement_type"),
-                        rs.getBigDecimal("quantity_delta"), rs.getBigDecimal("resulting_quantity"), rs.getString("reason"),
-                        rs.getTimestamp("occurred_at").toInstant())), businessId, itemId, itemId, MAX_MOVEMENT_ROWS + 1);
+                rs -> {
+                    rows.add(List.of(rs.getLong("id"), rs.getLong("item_id"), rs.getString("movement_type"),
+                            rs.getBigDecimal("quantity_delta"), rs.getBigDecimal("resulting_quantity"), rs.getString("reason"),
+                            rs.getTimestamp("occurred_at").toInstant()));
+                }, businessId, itemId, itemId, MAX_MOVEMENT_ROWS + 1);
         enforceLimit(rows.size() - 1L, MAX_MOVEMENT_ROWS);
         return csv(rows);
     }
