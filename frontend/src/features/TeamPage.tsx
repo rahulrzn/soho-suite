@@ -6,6 +6,7 @@ import { formatApiError } from '../api/formatError'
 import { createInvitation, listInvitations, requestOwnershipTransfer, resendInvitation, revokeInvitation, revokeOwnershipTransfer } from '../api/collaborationApi'
 import type { BusinessMember, BusinessRole, Invitation } from '../api/models'
 import { useWorkspace } from '../app/WorkspaceContext'
+import { PageHeader } from '../soho/components/misc'
 import { ConfirmDialog, Modal } from '../components/Modal'
 import { EmptyState, LoadingLine, Message } from '../components/Feedback'
 import type { PageCallbacks } from './types'
@@ -120,7 +121,7 @@ export function TeamPage({ onError, onNotice }: PageCallbacks) {
   }
 
   return <div className="feature-stack">
-    <section className="team-intro content-panel"><div><p className="section-label">PEOPLE AND ACCESS</p><h2>Your team, with the right access.</h2><p>Business membership and permissions are checked by the backend on every request.</p></div>{isOwner && <div className="inline-actions"><button className="button-secondary" onClick={() => setModal('add-member')}>Add existing user</button><button className="button-primary" onClick={() => setModal('invite')}>Invite by email <span aria-hidden="true">+</span></button></div>}</section>
+    <PageHeader eyebrow="Workspace" title="Team and access" description="Manage the members and invitations supported by this business backend." actions={isOwner && <div className="inline-actions"><button className="button-secondary" onClick={() => setModal('add-member')}>Add existing user</button><button className="button-primary" onClick={() => setModal('invite')}>Invite by email <span aria-hidden="true">+</span></button></div>} />
     {!isOwner && <Message variant="warning" text={'Team membership changes are managed by the business owner. Your current role is ' + (role || 'member') + '.'} />}
     <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">BUSINESS MEMBERS</p><h2>People in this workspace</h2><p>{members.length} current members</p></div><span className="role-chip">{role || 'Member'}</span></div>
       {members.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Person</th><th>Username</th><th>Role</th><th></th></tr></thead><tbody>{members.map((member) => <tr key={member.userId}><td><strong>{memberName(member)}</strong></td><td>{member.username ? '@' + member.username : '—'}</td><td>{isOwner && member.role !== 'OWNER' ? <select className="role-select" aria-label={'Role for ' + memberName(member)} value={member.role} disabled={busy} onChange={(event) => void saveRole(member, event.target.value as BusinessRole)}><option value="MANAGER">Manager</option><option value="VIEWER">Viewer</option></select> : <span className="status-tag status-muted">{member.role}</span>}</td><td>{isOwner && member.role !== 'OWNER' && <button className="button-quiet button-small" onClick={() => setRemoveTarget(member)}>Remove</button>}</td></tr>)}</tbody></table></div> : <EmptyState title="No member details returned" description="The backend did not return membership entries for this workspace." />}

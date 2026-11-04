@@ -8,7 +8,8 @@ import { formatApiError } from '../api/formatError'
 import type { AnalyticsOverview, DatasetDetail, DatasetMetadata, HealthScore } from '../api/models'
 import { useWorkspace } from '../app/WorkspaceContext'
 import { EmptyState, LoadingLine, Message } from '../components/Feedback'
-import { DateRange, MetricCard, MetricStatus } from './OverviewPage'
+import { DateRange, MetricStatus } from './OverviewPage'
+import { AnalyticsScreen } from '../soho/screens/analytics-screen'
 import type { PageCallbacks } from './types'
 import { saveCsvDownload } from '../utils/download'
 
@@ -90,8 +91,14 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
 
   const columns = [...new Set((detail?.columns ?? []).map((column) => column.name))]
   const canConfigure = role === 'OWNER' || role === 'MANAGER'
+  const screenMetrics = overview ? [
+    screenMetric('sales', 'Imported sales', overview.totalSalesAmount, (value) => formatMoney(value, overview.currency)),
+    screenMetric('orders', 'Orders', overview.distinctOrderCount, (value) => value.toLocaleString()),
+    screenMetric('aov', 'Average order value', overview.averageOrderValue, (value) => formatMoney(value, overview.currency)),
+    screenMetric('sales-change', 'Sales change', overview.salesChangePercent, (value) => (value > 0 ? '+' : '') + value.toFixed(2) + '%'),
+  ] : []
   return <div className="feature-stack">
-    <section className="analytics-intro content-panel"><div><p className="section-label">SALES FROM YOUR IMPORTED DATA</p><h2>Understand what the numbers can say.</h2><p>Metrics use one confirmed dataset mapping at a time. They describe imported rows, not audited revenue or profit.</p></div><div className="analytics-actions"><DateRange range={range} onChange={setRange} /><button className="button-secondary" disabled={downloadBusy} onClick={() => void downloadAnalytics()}>{downloadBusy ? 'Preparing CSVâ€¦' : 'Download analytics CSV'}</button></div></section>
+    <AnalyticsScreen businessName={business.tradingName || business.company} dateLabel={`${range.from} to ${range.to}`} currency={overview?.currency ?? business.businessCurrency} metrics={screenMetrics} dailyTrend={overview?.dailySalesTrend ?? { status: 'UNAVAILABLE', value: null, reason: 'Analytics have not returned for this period yet.' }} rangeControl={<DateRange range={range} onChange={setRange} />} exportBusy={downloadBusy} onExport={() => void downloadAnalytics()} />
     <section className="content-panel panel-pad">
       <div className="panel-heading"><div><p className="section-label">SOURCE DATASET</p><h2>Choose what analytics reads</h2><p>The backend reads confirmed imports only. Column names must match the reviewed dataset.</p></div>{configured && <span className="status-tag">Configured</span>}</div>
       {!canConfigure && <Message variant="warning" text="Your role can view analytics, but only an owner or manager can change the source mapping." />}
@@ -112,12 +119,6 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
     </section>
 
     {dateBusy ? <section className="content-panel panel-pad"><LoadingLine text="Loading analytics for this periodâ€¦" /></section> : overview ? <>
-      {overview.datasetId && [overview.totalSalesAmount, overview.distinctOrderCount, overview.averageOrderValue, overview.salesChangePercent].some((metric) => metric.status === 'AVAILABLE') ? <div className="analytics-metrics">
-        <MetricCard label="Imported sales" metric={overview.totalSalesAmount} format={(value) => formatMoney(value, overview.currency)} />
-        <MetricCard label="Orders" metric={overview.distinctOrderCount} format={(value) => value.toLocaleString()} />
-        <MetricCard label="Average order value" metric={overview.averageOrderValue} format={(value) => formatMoney(value, overview.currency)} />
-        <MetricCard label="Sales change" metric={overview.salesChangePercent} format={(value) => (value > 0 ? '+' : '') + value.toFixed(2) + '%'} />
-      </div> : <section className="content-panel panel-pad"><EmptyState title={overview.datasetId ? 'Metrics are not available for this period' : 'Choose a dataset for analytics'} description={overview.datasetId ? 'The availability details below explain what the imported data can support.' : 'Import and confirm a dataset, then map its date, amount, and order columns above.'} /></section>}
       <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">DATA QUALITY AND COVERAGE</p><h2>Metric availability</h2><p>{overview.datasetName ? 'Source: ' + overview.datasetName : 'No analytics dataset is configured for this business.'} Â· {overview.from} to {overview.to}</p></div></div>
         <div className="availability-list">{[
           ['Imported sales', overview.totalSalesAmount], ['Orders', overview.distinctOrderCount], ['Average order value', overview.averageOrderValue], ['Customers', overview.distinctCustomerCount], ['Daily sales trend', overview.dailySalesTrend], ['Sales change', overview.salesChangePercent],
@@ -128,9 +129,6 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
         {score?.components?.length ? <details className="score-method"><summary>How the score is calculated</summary>{score.components.map((component) => <div key={component.name}><strong>{component.name}</strong><span>{component.weightPercent}% of the score · {component.inputStatus.toLowerCase()}</span><p>{component.formula}</p>{component.reason && <small>{component.reason}</small>}</div>)}</details> : null}
         {score?.limitations && <p className="data-footnote">{score.limitations}</p>}
       </section>
-      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">DAILY TREND</p><h2>Sales by date</h2></div></div>
-        {overview.dailySalesTrend.status === 'AVAILABLE' && overview.dailySalesTrend.value?.length ? <div className="trend-list">{overview.dailySalesTrend.value.map((point) => <div key={point.date}><time dateTime={point.date}>{point.date}</time><span className="trend-track"><i style={{ width: trendWidth(point.salesAmount, overview.dailySalesTrend.value ?? []) }} /></span><strong>{formatMoney(point.salesAmount, overview.currency)}</strong></div>)}</div> : <EmptyState title="Trend not available" description={overview.dailySalesTrend.reason ?? 'No daily trend was returned for this date range.'} />}
-      </section>
     </> : <section className="content-panel panel-pad"><EmptyState title="Analytics could not be loaded" description="The backend did not return analytics for this date range. Check the request status and try again." /></section>}
   </div>
 }
@@ -140,9 +138,9 @@ function mappingField(label: string, key: keyof typeof blankMapping, mapping: ty
   return <label>{label}{optional && <span className="optional-label">Optional</span>}<select value={mapping[key]} required={!optional} onChange={(event) => setMapping((value) => ({ ...value, [key]: event.target.value }))}><option value="">{optional ? 'No customer column' : 'Choose a reviewed column'}</option>{columns.filter((column) => !used.includes(column) || column === mapping[key]).map((column) => <option value={column} key={column}>{column}</option>)}</select></label>
 }
 function validMapping(value: typeof blankMapping) { const required = [value.dateColumn, value.lineAmountColumn, value.orderIdColumn]; const mapped = [...required, ...(value.customerIdColumn ? [value.customerIdColumn] : [])]; return required.every(Boolean) && new Set(mapped).size === mapped.length }
+function screenMetric(id: string, label: string, metric: { status: string; value: number | null; reason: string | null }, format: (value: number) => string) { return { id, label, value: metric.status === 'AVAILABLE' && metric.value !== null ? format(metric.value) : null, status: metric.status, reason: metric.reason } }
 function defaultRange() { const to = new Date(); const from = new Date(to); from.setDate(from.getDate() - 29); return { from: isoLocal(from), to: isoLocal(to) } }
 function isoLocal(value: Date) { return value.getFullYear() + '-' + String(value.getMonth() + 1).padStart(2, '0') + '-' + String(value.getDate()).padStart(2, '0') }
 function validRange(from: string, to: string) { const a = Date.parse(from + 'T00:00:00Z'); const b = Date.parse(to + 'T00:00:00Z'); return Number.isFinite(a) && Number.isFinite(b) && b >= a && (b - a) / 86400000 + 1 <= 366 }
 function formatMoney(value: number, currency: string | null) { return currency ? new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value) : value.toLocaleString(undefined, { maximumFractionDigits: 2 }) }
-function trendWidth(value: number, points: { salesAmount: number }[]) { const max = Math.max(1, ...points.map((point) => point.salesAmount)); return Math.max(0, Math.min(100, (value / max) * 100)) + '%' }
 function messageOf(error: unknown) { return formatApiError(error) }

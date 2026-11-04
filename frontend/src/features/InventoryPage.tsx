@@ -10,6 +10,7 @@ import { EmptyState, LoadingLine, Message } from '../components/Feedback'
 import { clearIdempotencyKey, resolveIdempotencyKey, type PendingOperation } from '../workspace/idempotency'
 import type { PageCallbacks } from './types'
 import { saveCsvDownload } from '../utils/download'
+import { PageHeader } from '../soho/components/misc'
 
 const pageSize = 20
 const movementTypes: InventoryMovementType[] = ['OPENING_STOCK', 'RECEIPT', 'ADJUSTMENT', 'DAMAGE', 'COUNT_CORRECTION']
@@ -106,7 +107,7 @@ export function InventoryPage({ onError, onNotice }: PageCallbacks) {
   }
 
   return <div className="feature-stack">
-    <section className="operations-intro content-panel"><div><p className="section-label">STOCK ON HAND AND MOVEMENTS</p><h2>Keep inventory changes traceable.</h2><p>Quantities come from the backend stock ledger. The API does not define units, thresholds, or automatic sales deductions.</p></div><div className="inline-actions"><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('inventory')}>{downloadBusy ? 'Preparing CSV…' : 'Inventory CSV'}</button><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('movements')}>Movement CSV</button>{editable && <button className="button-primary" onClick={() => setModal('create')}>Add item <span aria-hidden="true">+</span></button>}</div></section>
+    <PageHeader eyebrow="Operations · Inventory" title="Inventory" description="Manage item records and trace stock changes through the backend movement ledger." actions={<div className="inline-actions"><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('inventory')}>{downloadBusy ? 'Preparing CSV…' : 'Inventory CSV'}</button><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('movements')}>Movement CSV</button>{editable && <button className="button-primary" onClick={() => setModal('create')}>Add item <span aria-hidden="true">+</span></button>}</div>} />
     {!editable && <Message variant="warning" text="Your role can view inventory and movement history. An owner or manager can change stock." />}
     <div className="inventory-layout">
       <section className="content-panel panel-pad inventory-list-panel"><div className="panel-heading"><div><p className="section-label">ITEMS</p><h2>Inventory</h2><p>{total.toLocaleString()} items</p></div><label className="compact-filter">Show<select value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value as typeof activeFilter); setPage(0) }}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label></div>

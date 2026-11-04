@@ -6,12 +6,14 @@ import { formatApiError } from '../api/formatError'
 import { getDataset, listDatasets, uploadDataset, confirmDataset } from '../api/datasetApi'
 import type { DatasetDetail, DatasetMetadata } from '../api/models'
 import { useWorkspace } from '../app/WorkspaceContext'
-import { RouteLink, navigate } from '../app/navigation'
+import { navigate } from '../app/navigation'
 import { Modal } from '../components/Modal'
-import { EmptyState, LoadingLine, Message } from '../components/Feedback'
+import { LoadingLine, Message } from '../components/Feedback'
 import { canWriteDatasets } from '../workspace/membershipRole'
 import { clearPendingUploadKey, resolvePendingUploadKey, uploadPayloadFingerprint, type PendingUpload } from '../workspace/uploadIdempotency'
 import type { PageCallbacks } from './types'
+import { DatasetsScreen } from '../soho/screens/datasets-screen'
+import type { Dataset as MockDataset } from '../soho/types'
 
 const maxBytes = 5 * 1024 * 1024
 const uploadMemory = new Map<number, PendingUpload>()
@@ -19,10 +21,21 @@ const uploadMemory = new Map<number, PendingUpload>()
 export function DatasetsPage({ onError, onNotice }: PageCallbacks) {
   const { business, role } = useWorkspace()
   const [datasets, setDatasets] = useState<DatasetMetadata[]>([])
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
   const [preview, setPreview] = useState<DatasetDetail | null>(null)
   const canWrite = canWriteDatasets(role)
+  const screenDatasets: MockDataset[] = datasets.map((dataset) => ({
+    id: String(dataset.id),
+    name: dataset.name,
+    description: dataset.description ?? undefined,
+    source: dataset.fileType.toLowerCase().includes('csv') ? 'CSV' : dataset.fileType.toLowerCase().includes('xlsx') ? 'Excel' : dataset.fileType,
+    rows: dataset.rowCount,
+    columns: dataset.columnCount,
+    updatedAt: new Date(dataset.createdAt).toLocaleDateString(),
+    status: dataset.status === 'IMPORTED' ? 'ready' : 'needs-review',
+  }))
   const load = useCallback(async () => {
     setLoading(true)
     try { setDatasets(await listDatasets(business.id)) }
@@ -54,17 +67,8 @@ export function DatasetsPage({ onError, onNotice }: PageCallbacks) {
   }
 
   return <div className="feature-stack">
-    <section className="dataset-intro content-panel">
-      <div><p className="section-label">YOUR IMPORTED BUSINESS DATA</p><h2>Bring your own numbers.</h2><p>Review every file before it becomes part of the workspace. Soho Suite supports bounded CSV and Excel imports.</p></div>
-      <div className="dataset-limits"><span>CSV · XLSX</span><span>Up to 5 MiB</span><span>20,000 rows</span><span>100 columns</span></div>
-      {canWrite && <button className="button-primary" onClick={() => { setPreview(null); setShowUpload(true) }}>Upload dataset <span aria-hidden="true">↑</span></button>}
-    </section>
     {!canWrite && <Message variant="warning" text="Your membership is read-only for dataset changes. Ask a business owner or manager to upload or edit data." />}
-    <section className="content-panel panel-pad">
-      <div className="panel-heading"><div><p className="section-label">DATA LIBRARY</p><h2>Datasets</h2><p>Imported files are stored as parsed rows; original uploads are not retained.</p></div><span className="status-tag status-muted">{datasets.length} total</span></div>
-      {loading ? <LoadingLine text="Loading datasets…" /> : datasets.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Name</th><th>Source file</th><th>Status</th><th>Rows</th><th>Added</th><th></th></tr></thead><tbody>{datasets.map((dataset) => <tr key={dataset.id}><td><strong>{dataset.name}</strong>{dataset.description && <small className="cell-secondary">{dataset.description}</small>}</td><td>{dataset.originalFilename}</td><td><span className={dataset.status === 'IMPORTED' ? 'status-tag' : 'status-tag status-warning'}>{dataset.status.toLowerCase()}</span></td><td>{dataset.rowCount.toLocaleString()}</td><td>{new Date(dataset.createdAt).toLocaleDateString()}</td><td><RouteLink className="button-quiet button-small" to={'/datasets/' + dataset.id}>Open <span aria-hidden="true">→</span></RouteLink></td></tr>)}</tbody></table></div> : <EmptyState title="Your data library is ready" description="Start with a CSV or Excel file. You will be able to review the column names and quality findings before confirming an import." action={canWrite ? <button className="button-primary" onClick={() => setShowUpload(true)}>Choose a dataset</button> : undefined} />}
-      {datasets.length > 0 && <div className="table-footnote">The backend returns the dataset metadata list as one response. Row inspection uses server-side pagination.</div>}
-    </section>
+    {loading ? <section className="content-panel panel-pad"><LoadingLine text="Loading datasets…" /></section> : <DatasetsScreen datasets={screenDatasets} profiles={{}} query={query} onQueryChange={setQuery} onUpload={canWrite ? () => { setPreview(null); setShowUpload(true) } : undefined} onOpenDataset={(id) => navigate('/datasets/' + id)} />}
     {showUpload && <UploadDialog onClose={() => setShowUpload(false)} onUpload={upload} onError={onError} />}
     {preview && <ImportReview detail={preview} onClose={() => setPreview(null)} onConfirm={confirm} />}
   </div>

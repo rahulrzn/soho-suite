@@ -7,6 +7,7 @@ import { useWorkspace } from '../app/WorkspaceContext'
 import { RouteLink } from '../app/navigation'
 import { Message } from '../components/Feedback'
 import { ConfirmDialog } from '../components/Modal'
+import { PageHeader } from '../soho/components/misc'
 import type { PageCallbacks } from './types'
 
 export function BusinessSettingsPage({ onError, onNotice }: PageCallbacks) {
@@ -54,6 +55,7 @@ export function BusinessSettingsPage({ onError, onNotice }: PageCallbacks) {
     finally { setBusy(false) }
   }
   return <div className="feature-stack">
+    <PageHeader eyebrow="Workspace" title="Business settings" description="Update the profile details and defaults used across this business." />
     <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">BUSINESS PROFILE</p><h2>Workspace details</h2><p>Changes are validated and stored by the Soho Suite backend.</p></div><span className="status-tag status-muted">{business.businessCode}</span></div>
       {!editable && <Message variant="warning" text="You can view these details, but only an owner or manager can edit the business profile." />}
       <form className="form-grid form-stack" onSubmit={(event) => void submit(event)}>
@@ -95,7 +97,7 @@ export function ProfileSettingsPage({ onError, onNotice }: PageCallbacks) {
     catch (error) { onError(messageOf(error)) }
     finally { setBusy(false) }
   }
-  return <section className="content-panel panel-pad settings-profile">
+  return <div className="feature-stack"><PageHeader eyebrow="Account" title="Profile settings" description="Manage the profile details connected to your secure sign-in account." /><section className="content-panel panel-pad settings-profile">
     <div className="panel-heading"><div><p className="section-label">YOUR ACCOUNT</p><h2>Profile details</h2><p>Email is managed by Firebase Authentication and cannot be changed here.</p></div></div>
     <form className="form-grid form-stack" onSubmit={(event) => void submit(event)}>
       <label>First name<input name="firstName" defaultValue={profile.firstName} required autoComplete="given-name" /></label>
@@ -104,6 +106,6 @@ export function ProfileSettingsPage({ onError, onNotice }: PageCallbacks) {
       <label>Email<input value={profile.email} disabled /></label>
       <div className="form-actions"><button className="button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button></div>
     </form>
-  </section>
+  </section></div>
 }
 function messageOf(error: unknown) { return formatApiError(error) }

@@ -13,7 +13,7 @@ import { createProfile } from '../api/userApi'
 import { getMyProfile } from '../api/userApi'
 import { getCurrentFirebaseUser, logout, sendPasswordReset, sendVerificationEmail, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../auth/authService'
 import { auth, firebaseConfigurationError } from '../firebase'
-import { AppShell } from './AppShell'
+import { ProductionAppShell } from '../soho/shell/ProductionAppShell'
 import { navigate, useCurrentPath } from './navigation'
 import { WorkspaceProvider } from './WorkspaceContext'
 import type { WorkspaceState } from './WorkspaceContext'
@@ -155,11 +155,11 @@ export default function App() {
   if (!workspace || !activeBusiness || !profile) return <CenteredState title="Workspace unavailable" message="No business workspace is available for this account." actionLabel="Reload" onAction={() => void loadWorkspace()} secondaryLabel="Sign out" onSecondary={handleSignOut} />
 
   const content = workspaceStatus === 'ready' ? <WorkspaceProvider value={workspace}>
-    <AppShell route={location.route} profile={profile} businesses={businesses} business={activeBusiness} role={role} onSelectBusiness={selectBusiness} onSignOut={() => void handleSignOut()}>
+    <ProductionAppShell profile={profile} businesses={businesses} business={activeBusiness} role={role} onSelectBusiness={selectBusiness} onSignOut={() => void handleSignOut()}>
       {pageError && <Message variant="error" text={pageError} onDismiss={() => setPageError('')} />}
       {pageNotice && <Message variant="success" text={pageNotice} onDismiss={() => setPageNotice('')} />}
       <WorkspacePage key={String(activeBusiness.id) + ':' + location.route.name + (location.route.name === 'dataset-detail' ? ':' + location.route.datasetId : '')} route={location.route} onNotice={setPageNotice} onError={setPageError} />
-    </AppShell>
+    </ProductionAppShell>
   </WorkspaceProvider> : null
   return content
 }

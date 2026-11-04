@@ -11,6 +11,7 @@ import { ConfirmDialog, Modal } from '../components/Modal'
 import type { PageCallbacks } from './types'
 import { canWriteDatasets } from '../workspace/membershipRole'
 import { saveCsvDownload } from '../utils/download'
+import { PageHeader } from '../soho/components/misc'
 
 export function DatasetDetailPage({ datasetId, onError, onNotice }: PageCallbacks & { datasetId: number }) {
   const { business, role } = useWorkspace()
@@ -81,10 +82,7 @@ export function DatasetDetailPage({ datasetId, onError, onNotice }: PageCallback
   const pageCount = Math.max(1, Math.ceil(totalRows / pageSize))
   return <div className="feature-stack">
     <div className="detail-back-row"><RouteLink className="button-quiet" to="/datasets">← All datasets</RouteLink><span className={detail.status === 'IMPORTED' ? 'status-tag' : 'status-tag status-warning'}>{detail.status.toLowerCase()}</span></div>
-    <section className="content-panel panel-pad dataset-detail-head">
-      <div><p className="section-label">DATASET DETAILS</p><h2>{detail.name}</h2><p>{detail.originalFilename} · Added {new Date(detail.createdAt).toLocaleDateString()}</p></div>
-      <div className="inline-actions"><button className="button-secondary button-small" type="button" disabled={downloading} onClick={() => void exportRows()}>{downloading ? 'Preparing CSV…' : 'Download rows CSV'}</button>{canWrite && <><button className="button-secondary button-small" onClick={() => setModal('edit')}>Edit details</button><button className="button-danger button-small" onClick={() => setModal('delete')}>Delete dataset</button></>}</div>
-    </section>
+    <PageHeader eyebrow="Dataset details" title={detail.name} description={`${detail.originalFilename} · Added ${new Date(detail.createdAt).toLocaleDateString()} · ${detail.rowCount.toLocaleString()} rows · ${detail.columnCount} columns`} actions={<div className="inline-actions"><button className="button-secondary button-small" type="button" disabled={downloading} onClick={() => void exportRows()}>{downloading ? 'Preparing CSV…' : 'Download rows CSV'}</button>{canWrite && <><button className="button-secondary button-small" onClick={() => setModal('edit')}>Edit details</button><button className="button-danger button-small" onClick={() => setModal('delete')}>Delete dataset</button></>}</div>} />
     <section className="dataset-stat-grid"><article className="content-panel mini-stat"><span>Rows</span><strong>{detail.rowCount.toLocaleString()}</strong></article><article className="content-panel mini-stat"><span>Columns</span><strong>{detail.columnCount}</strong></article><article className="content-panel mini-stat"><span>File type</span><strong>{detail.fileType}</strong></article><article className="content-panel mini-stat"><span>Imported</span><strong>{detail.importedAt ? new Date(detail.importedAt).toLocaleDateString() : 'Not confirmed'}</strong></article></section>
     {Object.keys(detail.findings ?? {}).length > 0 && <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">DATA QUALITY</p><h2>Findings from the backend</h2></div></div><div className="finding-grid">{Object.entries(detail.findings).map(([key, count]) => <div key={key}><span>{humanize(key)}</span><strong>{count.toLocaleString()}</strong></div>)}</div><p className="table-footnote">Findings describe the imported source. Confirmation does not clean, correct, or certify the data.</p></section>}
     <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">ROW INSPECTION</p><h2>Preview rows</h2><p>Page {page + 1} of {pageCount} · server page size {pageSize}</p></div><span className="status-tag status-muted">{totalRows.toLocaleString()} stored rows</span></div>

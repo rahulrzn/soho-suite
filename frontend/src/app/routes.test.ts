@@ -4,6 +4,7 @@ import { resolveRoute } from './routes'
 describe('resolveRoute', () => {
   it('resolves known workspace routes and preserves the dataset detail id', () => {
     expect(resolveRoute('/overview')).toEqual({ name: 'overview' })
+    expect(resolveRoute('/reports')).toEqual({ name: 'reports' })
     expect(resolveRoute('/datasets/42')).toEqual({ name: 'dataset-detail', datasetId: 42 })
   })
 

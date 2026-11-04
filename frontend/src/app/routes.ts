@@ -4,6 +4,7 @@ export type AppRoute =
   | { name: 'dataset-detail'; datasetId: number }
   | { name: 'analytics' }
   | { name: 'activity' }
+  | { name: 'reports' }
   | { name: 'expenses' }
   | { name: 'inventory' }
   | { name: 'team' }
@@ -20,6 +21,7 @@ const exactRoutes: Record<string, AppRoute> = {
   '/datasets': { name: 'datasets' },
   '/analytics': { name: 'analytics' },
   '/activity': { name: 'activity' },
+  '/reports': { name: 'reports' },
   '/expenses': { name: 'expenses' },
   '/inventory': { name: 'inventory' },
   '/team': { name: 'team' },
@@ -55,6 +57,7 @@ export function hrefForRoute(route: AppRoute): string {
     datasets: '/datasets',
     analytics: '/analytics',
     activity: '/activity',
+    reports: '/reports',
     expenses: '/expenses',
     inventory: '/inventory',
     team: '/team',
