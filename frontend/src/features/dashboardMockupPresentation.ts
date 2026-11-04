@@ -5,6 +5,8 @@ export type DashboardPresentation = {
   kpis: Kpi[]
   trend: TrendPoint[]
   health: MockHealthScore | null
+  healthUnavailableReason: string | null
+  healthFactors: { label: string; score: number | null; note: string; status: string }[]
   insights: Insight[]
   topCategories: CategoryValue[]
   stockAlerts: []
@@ -26,18 +28,29 @@ export function buildDashboardPresentation(analytics: AnalyticsOverview | null, 
   const score = health?.status === 'AVAILABLE' && health.score !== null ? health : null
   const mappedHealth: MockHealthScore | null = score ? {
     score: score.score!,
+    band: bandFor(score.score!),
     summary: score.interpretation,
     factors: score.components.filter((part) => part.score !== null).map((part) => ({
-      label: part.name,
+      label: healthFactorLabel(part.name),
       score: part.score!,
       weight: part.weightPercent / 100,
       note: part.reason ?? part.formula,
     })),
   } : null
+  const healthFactors = health?.components.map((part) => ({
+    label: healthFactorLabel(part.name),
+    score: part.score,
+    note: part.reason ?? part.formula,
+    status: part.inputStatus,
+  })) ?? []
   return {
     kpis: metricKpis,
     trend,
     health: mappedHealth,
+    healthFactors,
+    healthUnavailableReason: mappedHealth ? null : health?.components.find((part) => part.inputStatus !== 'AVAILABLE' && part.reason)?.reason
+      ?? health?.interpretation
+      ?? 'A health score is not available for this date range yet.',
     insights: [],
     topCategories: [],
     stockAlerts: [],
@@ -53,6 +66,25 @@ export function buildDashboardPresentation(analytics: AnalyticsOverview | null, 
       detail: event.action.toLowerCase().replaceAll('_', ' '),
     })),
   }
+}
+
+function bandFor(score: number): NonNullable<MockHealthScore['band']> {
+  if (score >= 80) return 'Thriving'
+  if (score >= 60) return 'Healthy'
+  if (score >= 40) return 'Watch'
+  return 'At risk'
+}
+
+function healthFactorLabel(name: string) {
+  const labels: Record<string, string> = {
+    profitability: 'Operating margin',
+    revenueGrowth: 'Revenue growth',
+    salesChange: 'Revenue growth',
+    cashFlow: 'Cash flow',
+    inventoryTurnover: 'Inventory turnover',
+    dataFreshness: 'Data freshness',
+  }
+  return labels[name] ?? name
 }
 
 function fromMetric(id: string, label: string, metric: { status: string; value: number | null; reason: string | null }, format: Kpi['format'], currency?: string | null): Kpi {

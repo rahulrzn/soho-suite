@@ -90,13 +90,13 @@ export function ReportsScreen({ templates, reports, scheduled, preview, onGenera
             <RefreshCw /> Retry
           </Button>
         ) : (
-          <RefreshCw className="ml-auto size-4 animate-spin text-info" aria-label="Generating" />
+          <RefreshCw className="ml-auto size-4 text-info" aria-label="Generating" />
         ),
     },
   ];
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Data"
         title="Reports"

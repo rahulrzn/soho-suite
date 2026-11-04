@@ -18,6 +18,11 @@ export type ApiResult = {
 }
 
 export function getDefaultApiBaseUrl(): string {
+  if (import.meta.env.DEV) return window.location.origin
+  const host = window.location.hostname
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return resolveApiBaseUrl('http://localhost:8080')
+  }
   return resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
 }
 

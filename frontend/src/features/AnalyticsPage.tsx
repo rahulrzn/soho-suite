@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Effects load analytics and dataset mapping from the backend. */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import { configureAnalytics, getAnalyticsOverview, getHealthScore } from '../api/analyticsApi'
 import { getDataset, listDatasets } from '../api/datasetApi'
@@ -12,6 +12,8 @@ import { DateRange, MetricStatus } from './OverviewPage'
 import { AnalyticsScreen } from '../soho/screens/analytics-screen'
 import type { PageCallbacks } from './types'
 import { saveCsvDownload } from '../utils/download'
+import { getSharedAnalyticsReason, isAnalyticsReasonShared } from './analyticsPresentation'
+import { RequestSequence } from './requestSequence'
 
 const blankMapping = { dateColumn: '', lineAmountColumn: '', orderIdColumn: '', customerIdColumn: '', confirmedCurrency: '' }
 
@@ -28,6 +30,7 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
   const [downloadBusy, setDownloadBusy] = useState(false)
   const [configured, setConfigured] = useState(false)
   const [mapping, setMapping] = useState({ ...blankMapping, confirmedCurrency: business.businessCurrency ?? '' })
+  const resultsRequests = useRef(new RequestSequence())
 
   const loadDatasets = useCallback(async () => {
     try { setDatasets((await listDatasets(business.id)).filter((item) => item.status === 'IMPORTED')) }
@@ -36,12 +39,14 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
   useEffect(() => { void loadDatasets() }, [loadDatasets])
 
   const loadResults = useCallback(async () => {
+    const requestId = resultsRequests.current.next()
     if (!validRange(range.from, range.to)) { onError('Choose a valid date range of no more than 366 days.'); setDateBusy(false); return }
     setDateBusy(true)
     const [overviewResult, scoreResult] = await Promise.allSettled([
       getAnalyticsOverview(business.id, range.from, range.to),
       getHealthScore(business.id, range.from, range.to),
     ])
+    if (!resultsRequests.current.isCurrent(requestId)) return
     if (overviewResult.status === 'fulfilled') {
       setOverview(overviewResult.value)
       setConfigured(Boolean(overviewResult.value.datasetId))
@@ -51,12 +56,17 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
     else setScore(null)
     setDateBusy(false)
   }, [business.id, range.from, range.to, onError])
-  useEffect(() => { void loadResults() }, [loadResults])
+  useEffect(() => {
+    const requests = resultsRequests.current
+    void loadResults()
+    return () => { requests.next() }
+  }, [loadResults])
 
   useEffect(() => {
     const id = Number(selectedId)
     if (!id) { setDetail(null); return }
     let active = true
+    setDetail(null)
     void getDataset(business.id, id).then((result) => { if (active) setDetail(result) }).catch((error) => { if (active) { setDetail(null); onError(messageOf(error)) } })
     return () => { active = false }
   }, [business.id, selectedId, onError])
@@ -97,10 +107,11 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
     screenMetric('aov', 'Average order value', overview.averageOrderValue, (value) => formatMoney(value, overview.currency)),
     screenMetric('sales-change', 'Sales change', overview.salesChangePercent, (value) => (value > 0 ? '+' : '') + value.toFixed(2) + '%'),
   ] : []
+  const sharedDataReason = getSharedAnalyticsReason(screenMetrics, overview?.dailySalesTrend)
   return <div className="feature-stack">
-    <AnalyticsScreen businessName={business.tradingName || business.company} dateLabel={`${range.from} to ${range.to}`} currency={overview?.currency ?? business.businessCurrency} metrics={screenMetrics} dailyTrend={overview?.dailySalesTrend ?? { status: 'UNAVAILABLE', value: null, reason: 'Analytics have not returned for this period yet.' }} rangeControl={<DateRange range={range} onChange={setRange} />} exportBusy={downloadBusy} onExport={() => void downloadAnalytics()} />
+    <AnalyticsScreen businessName={business.tradingName || business.company} dateLabel={`${range.from} to ${range.to}`} currency={overview?.currency ?? business.businessCurrency} metrics={screenMetrics} dailyTrend={overview?.dailySalesTrend ?? { status: 'UNAVAILABLE', value: null, reason: 'Analytics have not returned for this period yet.' }} sharedDataReason={sharedDataReason} loading={dateBusy} rangeControl={<DateRange range={range} onChange={setRange} />} exportBusy={downloadBusy} onExport={() => void downloadAnalytics()} />
     <section className="content-panel panel-pad">
-      <div className="panel-heading"><div><p className="section-label">SOURCE DATASET</p><h2>Choose what analytics reads</h2><p>The backend reads confirmed imports only. Column names must match the reviewed dataset.</p></div>{configured && <span className="status-tag">Configured</span>}</div>
+      <div className="panel-heading"><div><p className="section-label">Source dataset</p><h2>Choose what analytics reads</h2><p>The backend reads confirmed imports only. Column names must match the reviewed dataset.</p></div>{configured && <span className="status-tag">Configured</span>}</div>
       {!canConfigure && <Message variant="warning" text="Your role can view analytics, but only an owner or manager can change the source mapping." />}
       {canConfigure ? <form className="analytics-config-form" onSubmit={(event) => void saveConfiguration(event)}>
         <label>Confirmed dataset<select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setMapping((value) => ({ ...value, dateColumn: '', lineAmountColumn: '', orderIdColumn: '', customerIdColumn: '' })) }}><option value="">Select an imported dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} Â· {dataset.rowCount.toLocaleString()} rows</option>)}</select></label>
@@ -118,18 +129,18 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
       </form> : <p className="quiet-text">The current source dataset is shown through the returned analytics response when available.</p>}
     </section>
 
-    {dateBusy ? <section className="content-panel panel-pad"><LoadingLine text="Loading analytics for this periodâ€¦" /></section> : overview ? <>
-      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">DATA QUALITY AND COVERAGE</p><h2>Metric availability</h2><p>{overview.datasetName ? 'Source: ' + overview.datasetName : 'No analytics dataset is configured for this business.'} Â· {overview.from} to {overview.to}</p></div></div>
+    {!dateBusy && overview ? <>
+      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">Data quality and coverage</p><h2>Metric availability</h2><p>{overview.datasetName ? 'Source: ' + overview.datasetName : 'No analytics dataset is configured for this business.'} Â· {overview.from} to {overview.to}</p></div></div>
         <div className="availability-list">{[
           ['Imported sales', overview.totalSalesAmount], ['Orders', overview.distinctOrderCount], ['Average order value', overview.averageOrderValue], ['Customers', overview.distinctCustomerCount], ['Daily sales trend', overview.dailySalesTrend], ['Sales change', overview.salesChangePercent],
-        ].map(([name, metric]) => { const result = metric as { status: string; reason: string | null }; return <div className="availability-row" key={name as string}><strong>{name as string}</strong><MetricStatus status={result.status} /><span>{result.reason || 'The backend returned this metric for the selected date range.'}</span></div> })}</div>
+        ].map(([name, metric]) => { const result = metric as { status: string; reason: string | null }; return <div className="availability-row" key={name as string}><strong>{name as string}</strong><MetricStatus status={result.status} />{result.reason && !isAnalyticsReasonShared(result.reason, sharedDataReason) && <span>{result.reason}</span>}</div> })}</div>
       </section>
-      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">HEALTH SCORE</p><h2>Sales change indicator</h2></div>{score?.status === 'AVAILABLE' && score.score !== null ? <span className="score-badge">{score.score} / 100</span> : <span className="status-tag status-muted">{score?.status?.toLowerCase() ?? 'unavailable'}</span>}</div>
+      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">Health score</p><h2>Sales change indicator</h2></div>{score?.status === 'AVAILABLE' && score.score !== null ? <span className="score-badge">{score.score} / 100</span> : <span className="status-tag status-muted">{score?.status?.toLowerCase() ?? 'unavailable'}</span>}</div>
         {score?.interpretation && <p className="score-copy">{score.interpretation}</p>}
         {score?.components?.length ? <details className="score-method"><summary>How the score is calculated</summary>{score.components.map((component) => <div key={component.name}><strong>{component.name}</strong><span>{component.weightPercent}% of the score · {component.inputStatus.toLowerCase()}</span><p>{component.formula}</p>{component.reason && <small>{component.reason}</small>}</div>)}</details> : null}
         {score?.limitations && <p className="data-footnote">{score.limitations}</p>}
       </section>
-    </> : <section className="content-panel panel-pad"><EmptyState title="Analytics could not be loaded" description="The backend did not return analytics for this date range. Check the request status and try again." /></section>}
+    </> : !dateBusy ? <section className="content-panel panel-pad"><EmptyState title="Analytics could not be loaded" description="The backend did not return analytics for this date range. Check the request status and try again." /></section> : null}
   </div>
 }
 

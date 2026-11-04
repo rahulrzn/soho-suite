@@ -73,7 +73,9 @@ Base route: `/api/businesses/{businessId}/analytics`.
 | --- | --- | --- |
 | PUT | `/dataset-config` | Configure dataset ID, date, line amount, order ID, optional customer ID columns, and confirmed currency. OWNER or MANAGER. |
 | GET | `/overview?from=YYYY-MM-DD&to=YYYY-MM-DD` | Return sales metrics and status/reason for each metric; any member. |
-| GET | `/health-score?from=YYYY-MM-DD&to=YYYY-MM-DD` | Return a deterministic 0–100 score only when sales change is available; otherwise return `INSUFFICIENT_DATA`. |
+| GET | `/health-score?from=YYYY-MM-DD&to=YYYY-MM-DD` | Calculate the score automatically from imported sales, recorded expenses, and dataset age when at least three factors are available; otherwise return `INSUFFICIENT_DATA`, with component values and reasons. |
+| GET | `/health-inputs?from=YYYY-MM-DD&to=YYYY-MM-DD` | Read saved manual cash balance, inventory value, and cost-of-goods-sold estimates for an exact date range; any member. These legacy estimates are not used by the automated health score. |
+| PUT | `/health-inputs` | Upsert those manual estimates for an exact date range in the business currency; OWNER or MANAGER. These legacy estimates are not used by the automated health score. |
 
 Analytics uses explicitly mapped imported dataset columns and a maximum 366-day inclusive date range.
 Metrics can be `AVAILABLE`, `INCOMPLETE`, or `UNAVAILABLE`. Invalid source dates make period totals incomplete;
@@ -86,13 +88,18 @@ sales change. Each result contains `status`, `value` when available, and `reason
 unavailable. Configuration request JSON is `{datasetId, dateColumn, lineAmountColumn, orderIdColumn,
 customerIdColumn, confirmedCurrency}`; response JSON returns those resolved columns and `updatedAt`.
 
-The health score has one component, imported sales change, weighted at 100%. Its formula is
-`clamp(50 + salesChangePercent, 0, 100)`, rounded to the nearest integer. It requires complete,
-available sales amounts for the selected and immediately preceding equal-length periods. A score of 50 means no
-change, 0 means a decline of 50% or more, and 100 means growth of 50% or more. It requires a reliable
-current and preceding comparison period; unavailable or incomplete analytics return no numeric score.
-The response states the input status, component, formula, interpretation, and limitations. This is a
-directional sales indicator, not a broad measure of business viability.
+The score has five equally weighted components. Operating-margin score is based on imported sales
+minus recorded same-currency expenses, scaled to a 55% target. Revenue-growth score is
+`clamp(50 + salesChangePercent, 0, 100)`. Freshness score is `clamp(100 - datasetAgeDays, 0, 100)`.
+Cash runway and inventory turnover are marked unavailable because the application does not track
+cash balances or inventory cost values. The aggregate is the rounded mean of available components
+and is returned only when at least three components can be calculated.
+
+Scores update from the selected date range and existing confirmed imports and expense records; no
+manual health inputs are required. Expense records may be incomplete, and targets are general
+directional heuristics rather than industry-specific advice. The response includes each component's
+formula, input status, reason, and limitations. The score is not an audited assessment, credit score,
+investment recommendation, or certification.
 
 ## Activity history
 

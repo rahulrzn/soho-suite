@@ -28,10 +28,11 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(
-            @Value("${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}") String configuredOrigins) {
+            @Value("${sohosuite.security.cors.allowed-origins:}") String configuredOrigins) {
         CorsConfiguration cors = new CorsConfiguration();
-        cors.setAllowedOrigins(Arrays.stream(configuredOrigins.split(","))
-                .map(String::trim).filter(origin -> !origin.isEmpty()).toList());
+        List<String> environmentOrigins = Arrays.stream(configuredOrigins.split(","))
+                .map(String::trim).filter(origin -> !origin.isEmpty()).toList();
+        cors.setAllowedOrigins(environmentOrigins);
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cors.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, "Idempotency-Key"));
         cors.setExposedHeaders(List.of(HttpHeaders.WWW_AUTHENTICATE, HttpHeaders.CONTENT_DISPOSITION));

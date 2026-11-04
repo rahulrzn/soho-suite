@@ -65,20 +65,20 @@ class GlobalExceptionHandlerTests {
     @Test
     void malformedAnalyticsDatesReturnSanitized400WithoutCallingService() throws Exception {
         AnalyticsService service = mock(AnalyticsService.class);
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalyticsController(service, mock(BusinessHealthScoreService.class)))
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalyticsController(service, mock(BusinessHealthScoreService.class), mock(com.sohosuite.backend.analytics.service.BusinessHealthInputService.class)))
                 .setControllerAdvice(handler).build();
 
         mvc.perform(get("/api/businesses/1/analytics/overview").param("from", "not-a-date").param("to", "2026-01-31"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.message").value("Invalid request parameter"));
+                .andExpect(jsonPath("$.message").value("Request validation failed"));
         verifyNoInteractions(service);
     }
 
     @Test
     void malformedAnalyticsToDateReturns400WithoutCallingService() throws Exception {
         AnalyticsService service = mock(AnalyticsService.class);
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalyticsController(service, mock(BusinessHealthScoreService.class)))
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalyticsController(service, mock(BusinessHealthScoreService.class), mock(com.sohosuite.backend.analytics.service.BusinessHealthInputService.class)))
                 .setControllerAdvice(handler).build();
         mvc.perform(get("/api/businesses/1/analytics/overview").param("from", "2026-01-01").param("to", "2026-99-99"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
@@ -88,7 +88,7 @@ class GlobalExceptionHandlerTests {
     @Test
     void unsupportedMediaTypeIsSanitized415() throws Exception {
         AnalyticsService service = mock(AnalyticsService.class);
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalyticsController(service, mock(BusinessHealthScoreService.class)))
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AnalyticsController(service, mock(BusinessHealthScoreService.class), mock(com.sohosuite.backend.analytics.service.BusinessHealthInputService.class)))
                 .setControllerAdvice(handler).build();
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
                 "/api/businesses/1/analytics/dataset-config").contentType(MediaType.TEXT_PLAIN).content("secret"))

@@ -83,7 +83,7 @@ export function TeamScreen({ members, invitations, permissions, seatsUsed, seats
   ];
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Workspace"
         title="Team"

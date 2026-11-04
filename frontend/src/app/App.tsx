@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Effects synchronize auth and server workspace state with React state. */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { onAuthStateChanged, reload } from 'firebase/auth'
 import type { User } from 'firebase/auth'
@@ -14,15 +14,18 @@ import { getMyProfile } from '../api/userApi'
 import { getCurrentFirebaseUser, logout, sendPasswordReset, sendVerificationEmail, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../auth/authService'
 import { auth, firebaseConfigurationError } from '../firebase'
 import { ProductionAppShell } from '../soho/shell/ProductionAppShell'
+import { BrandWordmark, LogoMark } from '../soho/shell/logo'
 import { navigate, useCurrentPath } from './navigation'
 import { WorkspaceProvider } from './WorkspaceContext'
 import type { WorkspaceState } from './WorkspaceContext'
 import { IntegrationDashboard } from '../App'
 import { WorkspacePage } from '../features/WorkspacePage'
 import { AcceptancePage } from '../features/AcceptancePage'
-import { Message } from '../components/Feedback'
+import { Message, Toast } from '../components/Feedback'
+import { ThemeToggle } from '../soho/components/theme-toggle'
 
 type WorkspaceStatus = 'loading' | 'profile' | 'business' | 'ready' | 'error'
+type ToastItem = { id: number; variant: 'success' | 'error'; text: string }
 const activeBusinessStorageKey = 'sohosuite.active-business-id'
 
 export default function App() {
@@ -37,14 +40,42 @@ export default function App() {
   const [members, setMembers] = useState<BusinessMember[]>([])
   const [pageError, setPageError] = useState('')
   const [pageNotice, setPageNotice] = useState('')
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const toastSequence = useRef(0)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => onAuthStateChanged(auth, (nextUser) => {
-    setUser(nextUser)
-    setAuthLoading(false)
-    setPageError('')
-    setPageNotice('')
-  }), [])
+  const pushToast = useCallback((variant: ToastItem['variant'], text: string) => {
+    const id = ++toastSequence.current
+    setToasts((current) => [...current, { id, variant, text }].slice(-4))
+  }, [])
+  const dismissToast = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id))
+  }, [])
+  const notifyNotice = useCallback((text: string) => {
+    setPageNotice(text)
+    if (text) pushToast('success', text)
+  }, [pushToast])
+  const notifyError = useCallback((text: string) => {
+    setPageError(text)
+    if (text) pushToast('error', text)
+    else setToasts((current) => current.filter((toast) => toast.variant !== 'error'))
+  }, [pushToast])
+
+  useEffect(() => {
+    const authFallback = setTimeout(() => setAuthLoading(false), 10000)
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      clearTimeout(authFallback)
+      setUser(nextUser)
+      setAuthLoading(false)
+      setPageError('')
+      setPageNotice('')
+      setToasts([])
+    })
+    return () => {
+      clearTimeout(authFallback)
+      unsubscribe()
+    }
+  }, [])
 
   const loadWorkspace = useCallback(async () => {
     if (!user?.emailVerified) return
@@ -53,7 +84,7 @@ export default function App() {
     try {
       let nextProfile: UserProfile
       try {
-        nextProfile = await getMyProfile()
+        nextProfile = await withTimeout(getMyProfile(), 'The profile check')
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) {
           setProfile(null)
@@ -65,7 +96,7 @@ export default function App() {
         }
         throw error
       }
-      const nextBusinesses = await listBusinesses()
+      const nextBusinesses = await withTimeout(listBusinesses(), 'The business list')
       setProfile(nextProfile)
       setBusinesses(nextBusinesses)
       const storedId = Number(sessionStorage.getItem(`${activeBusinessStorageKey}:${user.uid}`))
@@ -156,9 +187,10 @@ export default function App() {
 
   const content = workspaceStatus === 'ready' ? <WorkspaceProvider value={workspace}>
     <ProductionAppShell profile={profile} businesses={businesses} business={activeBusiness} role={role} onSelectBusiness={selectBusiness} onSignOut={() => void handleSignOut()}>
-      {pageError && <Message variant="error" text={pageError} onDismiss={() => setPageError('')} />}
-      {pageNotice && <Message variant="success" text={pageNotice} onDismiss={() => setPageNotice('')} />}
-      <WorkspacePage key={String(activeBusiness.id) + ':' + location.route.name + (location.route.name === 'dataset-detail' ? ':' + location.route.datasetId : '')} route={location.route} onNotice={setPageNotice} onError={setPageError} />
+      <div className="toast-viewport" aria-label="Notifications">
+        {toasts.map((toast) => <Toast key={toast.id} {...toast} onDismiss={dismissToast} />)}
+      </div>
+      <WorkspacePage key={String(activeBusiness.id) + ':' + location.route.name + (location.route.name === 'dataset-detail' ? ':' + location.route.datasetId : '')} route={location.route} onNotice={notifyNotice} onError={notifyError} />
     </ProductionAppShell>
   </WorkspaceProvider> : null
   return content
@@ -167,6 +199,7 @@ export default function App() {
 function AuthScreen({ error, onError }: { error: string; onError: (value: string) => void }) {
   const [mode, setMode] = useState<'sign-in' | 'register' | 'reset'>('sign-in')
   const [busy, setBusy] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [notice, setNotice] = useState('')
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -177,28 +210,29 @@ function AuthScreen({ error, onError }: { error: string; onError: (value: string
     setBusy(true); onError(''); setNotice('')
     try {
       if (mode === 'reset') {
-        await sendPasswordReset(email)
+        await withAuthTimeout(sendPasswordReset(email), 'password reset')
         setNotice('If the account can receive a reset email, Firebase has sent one.')
       } else if (mode === 'register') {
-        await signUpWithEmail(email, password)
-        await sendVerificationEmail()
+        await withAuthTimeout(signUpWithEmail(email, password), 'account creation')
+        await withAuthTimeout(sendVerificationEmail(), 'verification email')
         setNotice('Your account is ready. Check your inbox to verify your email before opening the workspace.')
       } else {
-        await signInWithEmail(email, password)
+        await withAuthTimeout(signInWithEmail(email, password), 'sign-in')
       }
     } catch (reason) { onError(authMessage(reason)) } finally { setBusy(false) }
   }
   return <main className="auth-layout">
-    <section className="auth-story"><div className="auth-brand"><span className="brand-symbol">S</span><span>soho<span className="brand-light">suite</span></span></div><div className="auth-story-copy"><p className="page-kicker">A CALMER WAY TO RUN YOUR BUSINESS</p><h1>Clarity for the work<br /><em>you do every day.</em></h1><p>Bring your business workspace, imported data, and daily operations together in one considered place.</p></div><div className="story-foot"><span>PRIVATE BY WORKSPACE</span><span>BUILT FOR SMALL BUSINESS</span></div></section>
-    <section className="auth-panel"><div className="auth-mobile-brand"><span className="brand-symbol">S</span><span>soho<span className="brand-light">suite</span></span></div><div className="auth-form-wrap"><p className="auth-overline">YOUR BUSINESS WORKSPACE</p><h2>{mode === 'sign-in' ? 'Welcome back' : mode === 'register' ? 'Create your account' : 'Reset your password'}</h2><p className="auth-lede">{mode === 'sign-in' ? 'Sign in to continue to your workspace.' : mode === 'register' ? 'Start with your secure Soho Suite account.' : 'We’ll send a reset link if the account can receive email.'}</p>
+    <ThemeToggle className="theme-toggle-floating" />
+    <section className="auth-story"><div className="auth-brand"><BrandWordmark /></div><div className="auth-story-copy"><p className="page-kicker">A calmer way to run your business</p><h1>Clarity for the work you do every day.</h1><p>Bring your business workspace, imported data, and daily operations together in one considered place.</p></div><div className="story-foot"><span>Private workspace</span><span>Made for small business</span></div></section>
+    <section className="auth-panel"><div className="auth-mobile-brand"><BrandWordmark /></div><div className="auth-form-wrap"><p className="auth-overline">Your business workspace</p><h2>{mode === 'sign-in' ? 'Welcome back' : mode === 'register' ? 'Create your account' : 'Reset your password'}</h2><p className="auth-lede">{mode === 'sign-in' ? 'Sign in to continue to your workspace.' : mode === 'register' ? 'Start with your secure Soho Suite account.' : 'We’ll send a reset link if the account can receive email.'}</p>
       {error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}
       <form className="form-stack" onSubmit={(event) => void submit(event)}>
         <label>Email address<input name="email" type="email" autoComplete="email" required maxLength={255} /></label>
-        {mode !== 'reset' && <label>Password<input name="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={6} required /></label>}
+        {mode !== 'reset' && <label>Password<span className="password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={6} required /><button className="password-visibility" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? 'Hide' : 'Show'}</button></span></label>}
         <button className="button-primary button-wide" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'reset' ? 'Send reset link' : mode === 'register' ? 'Create account' : 'Sign in'}<span aria-hidden="true">→</span></button>
       </form>
       {mode === 'sign-in' && <><div className="auth-divider"><span>OR</span></div><button className="button-secondary button-wide google-button" type="button" disabled={busy} onClick={() => { setBusy(true); onError(''); void signInWithGoogle().catch((reason) => onError(authMessage(reason))).finally(() => setBusy(false)) }}><GoogleMark />Continue with Google</button><button className="text-action forgot-action" type="button" onClick={() => { setMode('reset'); onError(''); setNotice('') }}>Forgot password?</button></>}
-      <p className="auth-switch">{mode === 'sign-in' ? 'New to Soho Suite?' : 'Already have an account?'} <button className="text-action" type="button" onClick={() => { setMode(mode === 'sign-in' ? 'register' : 'sign-in'); onError(''); setNotice('') }}>{mode === 'sign-in' ? 'Create an account' : 'Sign in'}</button></p>
+      <p className="auth-switch">{mode === 'sign-in' ? 'New to Soho Suite?' : 'Already have an account?'} <button className="text-action" type="button" onClick={() => { setMode(mode === 'sign-in' ? 'register' : 'sign-in'); setShowPassword(false); onError(''); setNotice('') }}>{mode === 'sign-in' ? 'Create an account' : 'Sign in'}</button></p>
       <p className="auth-privacy">Your account is secured by Firebase Authentication. Business data is served by your Soho Suite backend.</p>
     </div></section>
   </main>
@@ -231,15 +265,43 @@ function BusinessForm({ disabled, onSubmit }: { disabled: boolean; onSubmit: (ev
 }
 
 function OnboardingCard({ title, description, children, error, notice, onSignOut }: { title: string; description: string; children: ReactNode; error: string; notice: string; onSignOut: () => void }) {
-  return <main className="onboarding-page"><div className="onboarding-brand"><span className="brand-symbol">S</span><span>soho<span className="brand-light">suite</span></span></div><section className="onboarding-card"><p className="auth-overline">YOUR WORKSPACE</p><h1>{title}</h1><p className="auth-lede">{description}</p>{error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}{children}<button className="text-action onboarding-signout" type="button" onClick={onSignOut}>Sign out</button></section></main>
+  return <main className="onboarding-page"><ThemeToggle className="theme-toggle-floating" /><div className="onboarding-brand"><BrandWordmark /></div><section className="onboarding-card"><p className="auth-overline">Your workspace</p><h1>{title}</h1><p className="auth-lede">{description}</p>{error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}{children}<button className="text-action onboarding-signout" type="button" onClick={onSignOut}>Sign out</button></section></main>
 }
 
-function CenteredState({ title, message, loading, actionLabel, onAction, secondaryLabel, onSecondary, tertiaryLabel, onTertiary, error, notice }: { title: string; message: string; loading?: boolean; actionLabel?: string; onAction?: () => void; secondaryLabel?: string; onSecondary?: () => void; tertiaryLabel?: string; onTertiary?: () => void; error?: string; notice?: string }) {
-  return <main className="centered-state"><div className="state-brand"><span className="brand-symbol">S</span><span>soho<span className="brand-light">suite</span></span></div><section className="state-content"><span className={`state-icon${loading ? ' is-loading' : ''}`} aria-hidden="true">{loading ? '◌' : 'S'}</span><p className="auth-overline">BUSINESS WORKSPACE</p><h1>{title}</h1><p className="auth-lede">{message}</p>{error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}{actionLabel && <button className="button-primary" type="button" onClick={onAction}>{actionLabel}</button>}{secondaryLabel && <button className="button-secondary state-secondary" type="button" onClick={onSecondary}>{secondaryLabel}</button>}{tertiaryLabel && <button className="text-action state-tertiary" type="button" onClick={onTertiary}>{tertiaryLabel}</button>}</section></main>
+function CenteredState({ title, message, actionLabel, onAction, secondaryLabel, onSecondary, tertiaryLabel, onTertiary, error, notice }: { title: string; message: string; loading?: boolean; actionLabel?: string; onAction?: () => void; secondaryLabel?: string; onSecondary?: () => void; tertiaryLabel?: string; onTertiary?: () => void; error?: string; notice?: string }) {
+  return <main className="centered-state"><div className="state-brand"><BrandWordmark /></div><section className="state-content"><LogoMark className="state-icon" /><p className="auth-overline">Business workspace</p><h1>{title}</h1><p className="auth-lede">{message}</p>{error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}{actionLabel && <button className="button-primary" type="button" onClick={onAction}>{actionLabel}</button>}{secondaryLabel && <button className="button-secondary state-secondary" type="button" onClick={onSecondary}>{secondaryLabel}</button>}{tertiaryLabel && <button className="text-action state-tertiary" type="button" onClick={onTertiary}>{tertiaryLabel}</button>}</section></main>
+}
+
+async function withTimeout<T>(request: Promise<T>, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      request,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${label} is taking too long. Check that the backend is running and try again.`)), 15000)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
+async function withAuthTimeout<T>(request: Promise<T>, operation: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      request,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`Firebase ${operation} did not finish within 20 seconds. Check your internet connection and Firebase Authentication settings, then try again.`)), 20000)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
 }
 
 function ConfigurationScreen({ title, message }: { title: string; message: string }) {
-  return <main className="centered-state"><div className="state-brand"><span className="brand-symbol">S</span><span>soho<span className="brand-light">suite</span></span></div><section className="state-content"><span className="state-icon" aria-hidden="true">!</span><p className="auth-overline">ENVIRONMENT CONFIGURATION</p><h1>{title}</h1><p className="auth-lede">{message}</p><p className="configuration-note">Set the required Vite environment variables in this frontend environment, then restart the development server or redeploy.</p></section></main>
+  return <main className="centered-state"><div className="state-brand"><BrandWordmark /></div><section className="state-content"><LogoMark className="state-icon" /><p className="auth-overline">Environment configuration</p><h1>{title}</h1><p className="auth-lede">{message}</p><p className="configuration-note">Set the required Vite environment variables in this frontend environment, then restart the development server or redeploy.</p></section></main>
 }
 
 function GoogleMark() { return <svg viewBox="0 0 20 20" aria-hidden="true"><path fill="#4285F4" d="M19.6 10.23c0-.68-.06-1.36-.18-2.02H10v3.82h5.38a4.6 4.6 0 0 1-2 3.02v2.48h3.23c1.9-1.75 3-4.32 3-7.3Z"/><path fill="#34A853" d="M10 20c2.7 0 4.96-.9 6.62-2.47l-3.23-2.48c-.9.6-2.05.97-3.39.97-2.6 0-4.8-1.75-5.6-4.1H1.06v2.55A10 10 0 0 0 10 20Z"/><path fill="#FBBC05" d="M4.4 11.92a6 6 0 0 1 0-3.84V5.53H1.06a10 10 0 0 0 0 8.94l3.34-2.55Z"/><path fill="#EA4335" d="M10 3.98c1.47 0 2.8.5 3.84 1.5l2.88-2.89A9.62 9.62 0 0 0 10 0a10 10 0 0 0-8.94 5.53L4.4 8.08C5.2 5.73 7.4 3.98 10 3.98Z"/></svg> }
@@ -259,6 +321,11 @@ function errorMessage(error: unknown) {
 function authMessage(error: unknown) {
   const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
   if (code.includes('email-already-in-use')) return 'An account already uses this email. Try signing in instead.'
+  if (code.includes('network-request-failed')) return 'Firebase could not be reached. Check your internet connection and try again.'
+  if (code.includes('operation-not-allowed')) return 'Email and password sign-in is disabled for this Firebase project.'
+  if (code.includes('unauthorized-domain')) return `Firebase rejected sign-in from ${window.location.hostname}. This domain is not authorized.`
+  if (code.includes('too-many-requests')) return 'Too many attempts were made. Wait a little before trying again.'
+  if (code.includes('invalid-email')) return 'Enter a valid email address.'
   if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'The email or password is incorrect.'
   if (code.includes('weak-password')) return 'Choose a stronger password with at least six characters.'
   if (code.includes('popup-closed-by-user')) return 'The Google sign-in window was closed before sign-in completed.'

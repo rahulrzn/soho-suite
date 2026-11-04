@@ -3,6 +3,7 @@ import type { BusinessRole } from '../api/models'
 import type { UserProfile, Business } from '../api/models'
 import { RouteLink, navigate } from './navigation'
 import type { AppRoute } from './routes'
+import { BrandWordmark } from '../soho/shell/logo'
 
 type NavIconName = 'overview' | 'analytics' | 'datasets' | 'reports' | 'expenses' | 'inventory' | 'team' | 'activity' | 'settings' | 'more'
 const navigation: { label: string; route: AppRoute; group: string; icon: NavIconName; roles?: BusinessRole[] }[] = [
@@ -58,7 +59,7 @@ export function AppShell({ route, profile, businesses, business, role, onSelectB
       <a className="skip-link" href="#main-content">Skip to content</a>
       <aside className="suite-sidebar" aria-label="Main navigation">
         <RouteLink className="suite-brand" to={{ name: 'overview' }} aria-label="Soho Suite overview">
-          <LogoMark /><span>Soho<span className="brand-light"> Suite</span></span>
+          <BrandWordmark />
         </RouteLink>
         <label className="workspace-picker-label" htmlFor="workspace-picker">Your business</label>
         <select id="workspace-picker" className="workspace-picker" value={business.id} onChange={(event) => onSelectBusiness(Number(event.target.value))} aria-label="Choose business workspace">
@@ -113,15 +114,6 @@ function initials(first: string, last: string) { return `${first.trim().charAt(0
 function greeting() {
   const hour = new Date().getHours()
   return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
-}
-
-function LogoMark() {
-  return <svg className="suite-logo-mark" viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="9" />
-    <rect x="7" y="17" width="5" height="8" rx="1.5" />
-    <rect x="13.5" y="12" width="5" height="13" rx="1.5" />
-    <rect x="20" y="7" width="5" height="18" rx="1.5" />
-  </svg>
 }
 
 function NavIcon({ name }: { name: NavIconName }) {

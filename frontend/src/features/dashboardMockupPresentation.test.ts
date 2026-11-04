@@ -34,4 +34,24 @@ describe('buildDashboardPresentation', () => {
     }
     expect(buildDashboardPresentation(null, health).health).toBeNull()
   })
+
+  it('preserves the backend reason when a score cannot be calculated', () => {
+    const health: HealthScore = {
+      status: 'INSUFFICIENT_DATA', score: null, currency: null, from: '2026-10-01', to: '2026-10-30',
+      components: [{ name: 'salesChange', weightPercent: 100, inputStatus: 'INCOMPLETE', score: null, formula: 'documented formula', reason: 'Imported rows have invalid dates.' }],
+      interpretation: 'A score is unavailable.', limitations: 'Only imported data is used.',
+    }
+    expect(buildDashboardPresentation(null, health).healthUnavailableReason).toBe('Imported rows have invalid dates.')
+  })
+
+  it('labels the real backend score and its sales growth component for the dashboard', () => {
+    const health: HealthScore = {
+      status: 'AVAILABLE', score: 75, currency: 'INR', from: '2026-10-01', to: '2026-10-30',
+      components: [{ name: 'salesChange', weightPercent: 100, inputStatus: 'AVAILABLE', score: 75, formula: 'clamp(50 + change, 0, 100)', reason: 'Sales increased by 25 percent.' }],
+      interpretation: 'Imported sales increased.', limitations: 'This is a sales indicator.',
+    }
+    const result = buildDashboardPresentation(null, health).health
+    expect(result?.band).toBe('Healthy')
+    expect(result?.factors?.[0]?.label).toBe('Revenue growth')
+  })
 })

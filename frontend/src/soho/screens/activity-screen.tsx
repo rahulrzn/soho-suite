@@ -47,7 +47,7 @@ export function ActivityScreen({ events }: ActivityScreenProps) {
   const toggle = (m: ActivityModule) => setActive((a) => (a.includes(m) ? a.filter((x) => x !== m) : [...a, m]));
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Workspace"
         title="Activity history"
@@ -56,6 +56,17 @@ export function ActivityScreen({ events }: ActivityScreenProps) {
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by area">
+          <button
+            type="button"
+            aria-pressed={active.length === 0}
+            onClick={() => setActive([])}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              active.length === 0 ? "border-primary bg-primary text-primary-foreground" : "border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground",
+            )}
+          >
+            <History className="size-3.5" /> All
+          </button>
           {modules.map((m) => {
             const on = active.includes(m);
             const Icon = moduleMeta[m].icon;

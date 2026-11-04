@@ -48,7 +48,7 @@ export function DatasetUploadScreen({ preview, checks, onFileSelected, onImport 
   };
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="space-y-6">
       <div>
         <AppLink to="/datasets" className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> Datasets

@@ -223,13 +223,13 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="flex flex-col gap-5 border-b border-border pb-5 md:flex-row md:items-end md:justify-between md:pb-6">
       <div className="min-w-0">
-        {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
-        <h1 className="text-2xl font-semibold text-foreground md:text-[1.75rem]">{title}</h1>
+        {eyebrow && <p className="mb-1 text-sm font-medium text-primary">{eyebrow}</p>}
+        <h1 className="text-[1.8rem] font-semibold tracking-[-0.045em] text-foreground md:text-[2rem]">{title}</h1>
         {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">{actions}</div>}
     </div>
   );
 }
@@ -240,7 +240,7 @@ export function StatStrip({ children, className }: { children: ReactNode; classN
   return (
     <div
       className={cn(
-        "grid gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-soft sm:grid-cols-2 lg:grid-cols-4 [&>*]:bg-surface",
+        "grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:rounded-xl [&>*]:border [&>*]:border-border [&>*]:bg-surface",
         className,
       )}
     >

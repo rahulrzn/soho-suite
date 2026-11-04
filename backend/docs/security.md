@@ -2,7 +2,7 @@
 
 All application routes require a Firebase ID token except HTTP `OPTIONS` preflight requests. There are currently no public API routes. Unknown routes also pass through the authenticated policy. Actuator endpoints are not exposed by this application configuration.
 
-CORS allows the Vite development and preview origins (`http://localhost:5173` and `http://localhost:4173`) by default. Set `CORS_ALLOWED_ORIGINS` to a comma-separated list for deployed frontend origins. Credentials are disabled; the frontend sends its Firebase bearer token explicitly.
+CORS origins are supplied through the `CORS_ALLOWED_ORIGINS` environment variable as a comma-separated list and are not hard-coded in the security configuration. Configure it in the backend runtime's environment or secret/configuration manager (for example, `http://localhost:5173,http://localhost:4173` for local development and the exact HTTPS frontend origins in deployment). When unset, no browser origins are allowed. Credentials are disabled; the frontend sends its Firebase bearer token explicitly.
 
 The stateless Spring Security filter verifies bearer tokens with Firebase Admin SDK and revocation checking enabled. The resulting `VerifiedFirebaseIdentity` is the authenticated principal. Client supplied UID, local user ID, email, and role values do not establish caller identity. Business membership and role decisions remain database backed in `BusinessService`.
 

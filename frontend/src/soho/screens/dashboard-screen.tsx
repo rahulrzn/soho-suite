@@ -7,6 +7,7 @@ import { BarList, ChartLegend, Sparkline, TrendChart, type SeriesDef } from "../
 import { HealthGauge } from "../components/health-gauge";
 import { Delta, Meter, PageHeader } from "../components/misc";
 import { Panel, PanelBody, PanelHeader } from "../components/panel";
+import { LoadingLine } from "../../components/Feedback";
 import { formatValue } from "../lib/format";
 import { AppLink } from "../router-adapter";
 import type { CategoryValue, DashboardActivityEvent, HealthScore, Insight, Kpi, TrendPoint } from "../types";
@@ -16,6 +17,8 @@ export interface DashboardScreenProps {
   businessName: string;
   dateLabel: string;
   health: HealthScore | null;
+  healthUnavailableReason?: string | null;
+  healthFactors?: { label: string; score: number | null; note: string; status: string }[];
   kpis: Kpi[];
   revenueTrend: TrendPoint[];
   insights: Insight[];
@@ -24,6 +27,7 @@ export interface DashboardScreenProps {
   recentActivity: DashboardActivityEvent[];
   rangeControl?: ReactNode;
   trendSeries?: SeriesDef[];
+  refreshing?: boolean;
 }
 
 const insightIcon = { positive: TrendingUp, warning: TriangleAlert, neutral: Lightbulb };
@@ -36,27 +40,39 @@ const insightTone = {
 export function DashboardScreen(props: DashboardScreenProps) {
   const { health, kpis, revenueTrend, insights, topCategories, stockAlerts, recentActivity } = props;
   const history = health?.history ?? [];
+  const healthFactors = props.healthFactors ?? health?.factors?.map((factor) => ({ ...factor, status: "AVAILABLE" })) ?? [];
   const trendSeries = props.trendSeries ?? [{ key: "revenue", label: "Sales", color: "var(--chart-1)" }];
+  const header = <PageHeader
+    eyebrow={props.dateLabel}
+    title={`Good afternoon, ${props.userFirstName}`}
+    description={`Here's how ${props.businessName} is doing. Scores use confirmed sales and recorded expenses.`}
+    actions={props.rangeControl}
+  />;
 
   return (
-    <div className="space-y-6 animate-rise">
-      <PageHeader
-        eyebrow={props.dateLabel}
-        title={`Good afternoon, ${props.userFirstName}`}
-        description={`Here's how ${props.businessName} is doing. Numbers update when your datasets sync.`}
-        actions={props.rangeControl}
-      />
+    <div className="space-y-6">
+      {header}
+      {props.refreshing ? <section className="content-panel panel-pad" role="status"><LoadingLine text="Updating dashboard for the selected date range…" /></section> : <>
 
       {/* Hero: Health score + revenue trend */}
       <div className="grid gap-6 xl:grid-cols-12">
-        {health && <>
-        <Panel className="xl:col-span-5">
+        <Panel className="border-t-2 border-t-success xl:col-span-6 2xl:col-span-5">
           <PanelHeader
             eyebrow="Business health"
             title="Your health score"
-            actions={health.change !== undefined ? <Badge tone={health.change >= 0 ? "success" : "warning"}><TrendingUp className="size-3" /> {health.change > 0 ? "+" : ""}{health.change} this month</Badge> : undefined}
+            actions={health?.change !== undefined ? <Badge tone={health.change >= 0 ? "success" : "warning"}><TrendingUp className="size-3" /> {health.change > 0 ? "+" : ""}{health.change} this month</Badge> : undefined}
           />
           <PanelBody>
+            {!health ? <div className="min-w-0">
+              <div className="flex items-start gap-4 border-b border-border pb-4">
+                <span aria-hidden="true" className="num mt-0.5 text-3xl font-semibold leading-none text-muted-foreground">—</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Score unavailable</p>
+                  <p className="mt-1 max-w-prose text-sm leading-relaxed text-muted-foreground">{props.healthUnavailableReason ?? "A health score is not available for this date range yet."}</p>
+                </div>
+              </div>
+              {!!healthFactors.length && <HealthFactorList className="grid gap-x-6 gap-y-4 sm:grid-cols-2" factors={healthFactors} />}
+            </div> :
             <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
               <div className="flex flex-col items-center">
                 <HealthGauge score={health.score} band={health.band} size={210} />
@@ -78,28 +94,17 @@ export function DashboardScreen(props: DashboardScreenProps) {
               </div>
               <div className="w-full min-w-0 flex-1">
                 {health.summary && <p className="text-sm text-foreground/80">{health.summary}</p>}
-                {!!health.factors?.length && <ul className="mt-4 space-y-3">
-                  {health.factors.map((f) => (
-                    <li key={f.label}>
-                      <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-                        <span className="font-medium text-foreground">{f.label}</span>
-                        <span className="num text-xs text-muted-foreground">{f.score}</span>
-                      </div>
-                      <Meter value={f.score} tone="auto" label={`${f.label} score`} />
-                      <p className="mt-1 text-xs text-muted-foreground">{f.note}</p>
-                    </li>
-                  ))}
-                </ul>}
+                {!!healthFactors.length && <HealthFactorList factors={healthFactors} />}
               </div>
-            </div>
+            </div>}
           </PanelBody>
         </Panel>
 
-        <Panel className="flex flex-col xl:col-span-7">
+        <Panel className="flex flex-col border-t-2 border-t-primary xl:col-span-6 2xl:col-span-7">
           <PanelHeader
             eyebrow="Performance"
-            title="Sales trend"
-            description={props.dateLabel}
+            title="Revenue vs. expenses"
+            description="Last 12 months"
             actions={<ChartLegend series={trendSeries} />}
           />
           <PanelBody className="flex-1">
@@ -111,15 +116,16 @@ export function DashboardScreen(props: DashboardScreenProps) {
             />
           </PanelBody>
         </Panel>
-        </>}
       </div>
 
       {/* KPI strip — one surface, divided */}
-      <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-soft sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((k, i) => (
-          <div key={k.id} className="flex items-end justify-between gap-4 bg-surface p-5">
+      <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
+        {kpis.map((k, i) => {
+          const metricColor = ["var(--chart-1)", "var(--chart-4)", "var(--chart-2)", "var(--chart-3)"][i % 4];
+          return (
+          <div key={k.id} className="flex items-start justify-between gap-4 bg-surface p-5">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">{k.label}</p>
+              <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: metricColor }} />{k.label}</p>
               <p className="num mt-1.5 text-2xl font-semibold text-foreground">{k.value === null ? "—" : formatValue(k.value, k.format)}</p>
               {(k.delta !== null || k.caption || k.reason) && <div className="mt-2 flex flex-wrap items-center gap-2">
                 {k.delta !== null && k.goodWhen && <Delta value={k.delta} goodWhen={k.goodWhen} suffix="vs. previous period" />}
@@ -131,10 +137,10 @@ export function DashboardScreen(props: DashboardScreenProps) {
               values={k.spark}
               width={88}
               height={36}
-              color={i % 2 === 0 ? "var(--chart-1)" : "var(--chart-3)"}
+              color={metricColor}
             />}
           </div>
-        ))}
+        )})}
       </div>
 
       {(insights.length > 0 || topCategories.length > 0 || stockAlerts.length > 0) && <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-12">
@@ -240,6 +246,20 @@ export function DashboardScreen(props: DashboardScreenProps) {
           ))}
         </ul>
       </Panel>
+      </>}
     </div>
   );
+}
+
+function HealthFactorList({ factors, className = "mt-4 space-y-3" }: { factors: { label: string; score: number | null; note: string; status: string }[]; className?: string }) {
+  return <ul className={cn("mt-4", className)}>
+    {factors.map((factor) => <li key={factor.label}>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
+        <span className="font-medium text-foreground">{factor.label}</span>
+        <span className="num text-xs text-muted-foreground">{factor.score ?? 'Unavailable'}</span>
+      </div>
+      {factor.score !== null && <Meter value={factor.score} tone="auto" label={`${factor.label} score`} />}
+      <p className="mt-1 text-xs text-muted-foreground">{factor.note || factor.status.toLowerCase()}</p>
+    </li>)}
+  </ul>
 }

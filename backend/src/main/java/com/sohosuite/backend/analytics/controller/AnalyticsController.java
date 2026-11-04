@@ -4,7 +4,10 @@ import com.sohosuite.backend.analytics.dto.AnalyticsDatasetConfigRequest;
 import com.sohosuite.backend.analytics.dto.AnalyticsDatasetConfigResponse;
 import com.sohosuite.backend.analytics.dto.AnalyticsOverviewResponse;
 import com.sohosuite.backend.analytics.dto.BusinessHealthScoreResponse;
+import com.sohosuite.backend.analytics.dto.BusinessHealthInputRequest;
+import com.sohosuite.backend.analytics.dto.BusinessHealthInputResponse;
 import com.sohosuite.backend.analytics.service.BusinessHealthScoreService;
+import com.sohosuite.backend.analytics.service.BusinessHealthInputService;
 import com.sohosuite.backend.analytics.service.AnalyticsService;
 import com.sohosuite.backend.security.VerifiedFirebaseIdentity;
 import jakarta.validation.Valid;
@@ -26,11 +29,13 @@ public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
     private final BusinessHealthScoreService healthScoreService;
+    private final BusinessHealthInputService healthInputService;
 
     @Autowired
-    public AnalyticsController(AnalyticsService analyticsService, BusinessHealthScoreService healthScoreService) {
+    public AnalyticsController(AnalyticsService analyticsService, BusinessHealthScoreService healthScoreService, BusinessHealthInputService healthInputService) {
         this.analyticsService = analyticsService;
         this.healthScoreService = healthScoreService;
+        this.healthInputService = healthInputService;
     }
 
     @PutMapping(value = "/dataset-config", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -57,5 +62,22 @@ public class AnalyticsController {
             @RequestParam LocalDate from,
             @RequestParam LocalDate to) {
         return healthScoreService.score(identity, businessId, from, to);
+    }
+
+    @GetMapping("/health-inputs")
+    public BusinessHealthInputResponse healthInputs(
+            @AuthenticationPrincipal VerifiedFirebaseIdentity identity,
+            @PathVariable Long businessId,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        return healthInputService.get(identity, businessId, from, to);
+    }
+
+    @PutMapping(value = "/health-inputs", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public BusinessHealthInputResponse updateHealthInputs(
+            @AuthenticationPrincipal VerifiedFirebaseIdentity identity,
+            @PathVariable Long businessId,
+            @Valid @RequestBody BusinessHealthInputRequest request) {
+        return healthInputService.save(identity, businessId, request);
     }
 }

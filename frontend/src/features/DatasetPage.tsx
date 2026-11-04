@@ -3,11 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent, FormEvent } from 'react'
 import { ApiError } from '../api/apiTransport'
 import { formatApiError } from '../api/formatError'
-import { getDataset, listDatasets, uploadDataset, confirmDataset } from '../api/datasetApi'
+import { deleteDataset, getDataset, listDatasets, uploadDataset, confirmDataset } from '../api/datasetApi'
 import type { DatasetDetail, DatasetMetadata } from '../api/models'
 import { useWorkspace } from '../app/WorkspaceContext'
 import { navigate } from '../app/navigation'
-import { Modal } from '../components/Modal'
+import { ConfirmDialog, Modal } from '../components/Modal'
 import { LoadingLine, Message } from '../components/Feedback'
 import { canWriteDatasets } from '../workspace/membershipRole'
 import { clearPendingUploadKey, resolvePendingUploadKey, uploadPayloadFingerprint, type PendingUpload } from '../workspace/uploadIdempotency'
@@ -25,6 +25,8 @@ export function DatasetsPage({ onError, onNotice }: PageCallbacks) {
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
   const [preview, setPreview] = useState<DatasetDetail | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<DatasetMetadata | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
   const canWrite = canWriteDatasets(role)
   const screenDatasets: MockDataset[] = datasets.map((dataset) => ({
     id: String(dataset.id),
@@ -66,11 +68,25 @@ export function DatasetsPage({ onError, onNotice }: PageCallbacks) {
     navigate('/datasets/' + refreshed.id)
   }
 
+  async function removeDataset() {
+    if (!canWrite || !deleteTarget || deleteBusy) return
+    setDeleteBusy(true)
+    onError('')
+    try {
+      await deleteDataset(business.id, deleteTarget.id)
+      setDeleteTarget(null)
+      onNotice('Dataset deleted.')
+      await load()
+    } catch (error) { onError(messageOf(error)) }
+    finally { setDeleteBusy(false) }
+  }
+
   return <div className="feature-stack">
     {!canWrite && <Message variant="warning" text="Your membership is read-only for dataset changes. Ask a business owner or manager to upload or edit data." />}
-    {loading ? <section className="content-panel panel-pad"><LoadingLine text="Loading datasets…" /></section> : <DatasetsScreen datasets={screenDatasets} profiles={{}} query={query} onQueryChange={setQuery} onUpload={canWrite ? () => { setPreview(null); setShowUpload(true) } : undefined} onOpenDataset={(id) => navigate('/datasets/' + id)} />}
+    {loading ? <section className="content-panel panel-pad"><LoadingLine text="Loading datasets…" /></section> : <DatasetsScreen datasets={screenDatasets} profiles={{}} query={query} onQueryChange={setQuery} onUpload={canWrite ? () => { setPreview(null); setShowUpload(true) } : undefined} onOpenDataset={(id) => navigate('/datasets/' + id)} onDeleteDataset={canWrite ? (id) => { const target = datasets.find((dataset) => String(dataset.id) === id); if (target) setDeleteTarget(target) } : undefined} />}
     {showUpload && <UploadDialog onClose={() => setShowUpload(false)} onUpload={upload} onError={onError} />}
     {preview && <ImportReview detail={preview} onClose={() => setPreview(null)} onConfirm={confirm} />}
+    {deleteTarget && <ConfirmDialog title="Delete this dataset?" description="This permanently removes the dataset, its stored rows, and its analytics configuration from this business." confirmLabel="Delete dataset" destructive busy={deleteBusy} onCancel={() => setDeleteTarget(null)} onConfirm={() => void removeDataset()} />}
   </div>
 }
 

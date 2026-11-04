@@ -96,6 +96,21 @@ export type HealthScore = {
   interpretation: string
   limitations: string
 }
+export type BusinessHealthInput = {
+  saved: boolean
+  from: string
+  to: string
+  currency: string
+  cashBalance: number | null
+  inventoryValue: number | null
+  costOfGoodsSold: number | null
+  updatedAt: string | null
+}
+export type BusinessHealthInputRequest = Pick<BusinessHealthInput, 'from' | 'to'> & {
+  cashBalance: string
+  inventoryValue: string
+  costOfGoodsSold: string
+}
 export type ActivityEvent = {
   id: number
   actorUserId: number | null

@@ -114,7 +114,7 @@ export function InventoryScreen({ items, movements, reorder }: InventoryScreenPr
   ];
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Operations"
         title="Inventory"

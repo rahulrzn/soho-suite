@@ -1,10 +1,10 @@
 import { getIdToken } from '../auth/authService'
-import { resolveApiBaseUrl } from './apiConfig'
+import { getDefaultApiBaseUrl } from './apiClient'
 import { createApiClient, type ApiRequestOptions, type DownloadResult } from './apiTransport'
 
 function configuredClient() {
   return createApiClient({
-    baseUrl: resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL),
+    baseUrl: getDefaultApiBaseUrl(),
     getToken: getIdToken,
   })
 }

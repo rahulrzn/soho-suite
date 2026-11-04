@@ -160,7 +160,7 @@ class BackendApplicationTests {
         assertTrue(dataSource instanceof HikariDataSource);
         assertEquals(containerUrl, ((HikariDataSource) dataSource).getJdbcUrl());
         assertEquals(containerUrl, flywayConnectionDetails.getJdbcUrl());
-        assertEquals("11", flyway.info().current().getVersion().getVersion());
+        assertEquals("12", flyway.info().current().getVersion().getVersion());
 
         try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement();

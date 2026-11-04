@@ -12,6 +12,7 @@ import {
   signUpWithEmail,
 } from './auth/authService'
 import { auth } from './firebase'
+import { BrandWordmark } from './soho/shell/logo'
 import {
   apiRequest,
   getDefaultApiBaseUrl,
@@ -376,7 +377,7 @@ export function IntegrationDashboard() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Soho Suite dashboard home"><span className="brand-mark">S</span><span>soho<span className="brand-light">suite</span></span></a>
+        <a className="brand" href="#top" aria-label="Soho Suite dashboard home"><BrandWordmark className="brand-wordmark-compact" /></a>
         <div className="topbar-right"><span className="environment-pill"><i /> API workbench</span><span className="topbar-account">{user ? signedInLabel : 'No account connected'}</span></div>
       </header>
 

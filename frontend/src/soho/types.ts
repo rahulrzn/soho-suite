@@ -41,7 +41,7 @@ export interface HealthScore {
 
 export interface TrendPoint {
   label: string;
-  [series: string]: number | string;
+  [series: string]: number | string | null;
 }
 
 export interface Insight {

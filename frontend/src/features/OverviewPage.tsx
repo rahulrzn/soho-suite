@@ -1,38 +1,58 @@
 /* eslint-disable react-hooks/set-state-in-effect -- The effect loads overview data when its date range changes. */
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { getAnalyticsOverview, getHealthScore } from '../api/analyticsApi'
 import { getActivity } from '../api/activityApi'
+import { listExpenses } from '../api/expenseApi'
+import { exportAnalytics } from '../api/exportApi'
 import type { ActivityEvent, AnalyticsOverview, HealthScore, Metric } from '../api/models'
 import { useWorkspace } from '../app/WorkspaceContext'
 import { RouteLink } from '../app/navigation'
 import { EmptyState, LoadingLine } from '../components/Feedback'
+import { Button } from '../soho/components/button'
+import type { SeriesDef } from '../soho/components/charts'
+import { Download } from 'lucide-react'
+import { formatApiError } from '../api/formatError'
+import { saveCsvDownload } from '../utils/download'
+import type { TrendPoint } from '../soho/types'
 import type { PageCallbacks } from './types'
 import { hasAnalyticsSource } from './dashboardReadiness'
 import { buildDashboardPresentation } from './dashboardMockupPresentation'
+import { buildMonthlyPerformance, getDashboardDateRange, getTrailingYearRange, loadAllExpenses, type DashboardPreset } from './dashboardData'
+import { RequestSequence } from './requestSequence'
 
 const DashboardScreen = lazy(() => import('../soho/screens/dashboard-screen').then(({ DashboardScreen: screen }) => ({ default: screen })))
 
-export function OverviewPage({ onError }: PageCallbacks) {
+export function OverviewPage({ onError, onNotice }: PageCallbacks) {
   const { business, profile } = useWorkspace()
-  const [range, setRange] = useState(() => defaultRange())
+  const [preset, setPreset] = useState<DashboardPreset | 'CUSTOM'>('YTD')
+  const [range, setRange] = useState(() => getDashboardDateRange('YTD'))
+  const [customRange, setCustomRange] = useState(range)
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null)
   const [score, setScore] = useState<HealthScore | null>(null)
   const [activity, setActivity] = useState<ActivityEvent[]>([])
+  const [performance, setPerformance] = useState<TrendPoint[]>([])
+  const [expensesAvailable, setExpensesAvailable] = useState(true)
   const [busy, setBusy] = useState(true)
-  const [refresh, setRefresh] = useState(0)
+  const [exporting, setExporting] = useState(false)
+  const dataRequests = useRef(new RequestSequence())
 
   const reloadData = useCallback(async () => {
+    const requestId = dataRequests.current.next()
     if (!validRange(range.from, range.to)) {
       onError('Choose a valid date range of no more than 366 days.')
       setBusy(false)
       return
     }
     setBusy(true)
-    const [overviewResult, scoreResult, activityResult] = await Promise.allSettled([
+    const performanceRange = getTrailingYearRange()
+    const [overviewResult, scoreResult, activityResult, performanceResult, expenseResult] = await Promise.allSettled([
       getAnalyticsOverview(business.id, range.from, range.to),
       getHealthScore(business.id, range.from, range.to),
       getActivity(business.id, 0, 5),
+      getAnalyticsOverview(business.id, performanceRange.from, performanceRange.to),
+      loadAllExpenses((page, size, from, to) => listExpenses(business.id, { from, to, page, size }), performanceRange.from, performanceRange.to),
     ])
+    if (!dataRequests.current.isCurrent(requestId)) return
     const failures: string[] = []
     if (overviewResult.status === 'fulfilled') setAnalytics(overviewResult.value)
     else { setAnalytics(null); failures.push(errorText(overviewResult.reason)) }
@@ -40,36 +60,101 @@ export function OverviewPage({ onError }: PageCallbacks) {
     else { setScore(null); failures.push(errorText(scoreResult.reason)) }
     if (activityResult.status === 'fulfilled') setActivity(activityResult.value.items)
     else { setActivity([]); failures.push(errorText(activityResult.reason)) }
+    if (performanceResult.status === 'fulfilled' && expenseResult.status === 'fulfilled') {
+      const trend = performanceResult.value.dailySalesTrend
+      setPerformance(buildMonthlyPerformance(
+        trend.status === 'AVAILABLE' ? trend.value : null,
+        expenseResult.value,
+        performanceResult.value.currency ?? business.businessCurrency,
+        performanceRange.from,
+        performanceRange.to,
+      ))
+      setExpensesAvailable(true)
+    } else {
+      setPerformance(performanceResult.status === 'fulfilled'
+        ? buildMonthlyPerformance(null, expenseResult.status === 'fulfilled' ? expenseResult.value : [], performanceResult.value.currency ?? business.businessCurrency, performanceRange.from, performanceRange.to)
+        : [])
+      setExpensesAvailable(expenseResult.status === 'fulfilled')
+      if (performanceResult.status === 'rejected') failures.push(`Performance trend: ${errorText(performanceResult.reason)}`)
+      if (expenseResult.status === 'rejected') failures.push(`Expenses: ${errorText(expenseResult.reason)}`)
+    }
     if (failures.length) onError([...new Set(failures)].join(' '))
     setBusy(false)
-  }, [business.id, range.from, range.to, onError])
+  }, [business.businessCurrency, business.id, range.from, range.to, onError])
 
-  useEffect(() => { void reloadData() }, [reloadData, refresh])
+  useEffect(() => {
+    const requests = dataRequests.current
+    void reloadData()
+    return () => { requests.next() }
+  }, [reloadData])
 
   const analyticsConfigured = hasAnalyticsSource(analytics)
   const dashboard = buildDashboardPresentation(analytics, score, activity)
+  const trendSeries: SeriesDef[] = [
+    { key: 'revenue', label: 'Revenue', color: 'var(--chart-1)' },
+    ...(expensesAvailable ? [{ key: 'expenses', label: 'Expenses', color: 'var(--chart-2)', kind: 'line' as const }] : []),
+  ]
+
+  function selectPreset(next: DashboardPreset) {
+    setPreset(next)
+    const nextRange = getDashboardDateRange(next)
+    setRange(nextRange)
+    setCustomRange(nextRange)
+  }
+
+  function openCustomRange() {
+    setCustomRange(range)
+    setPreset('CUSTOM')
+  }
+
+  function applyCustomRange() {
+    if (!validRange(customRange.from, customRange.to)) {
+      onError('Choose a valid date range of no more than 366 days.')
+      return
+    }
+    onError('')
+    setRange(customRange)
+  }
+
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    onError('')
+    try {
+      const result = await exportAnalytics(business.id, range.from, range.to)
+      saveCsvDownload(result, 'soho-analytics.csv')
+      onNotice('Analytics CSV download started.')
+    } catch (error) { onError(formatApiError(error)) }
+    finally { setExporting(false) }
+  }
 
   return <div className="feature-stack">
-    {busy && <LoadingLine text="Refreshing this workspace’s real data…" />}
-    {analyticsConfigured ? <Suspense fallback={<LoadingLine text="Opening dashboard…" />}><DashboardScreen
+    {analyticsConfigured || busy ? <Suspense fallback={<LoadingLine text="Opening dashboard…" />}><DashboardScreen
       userFirstName={profile.firstName}
       businessName={business.tradingName || business.company}
-      dateLabel={range.from + ' to ' + range.to}
+      dateLabel={formatDateRangeLabel(range.from, range.to)}
       health={dashboard.health}
+      healthUnavailableReason={dashboard.healthUnavailableReason}
+      healthFactors={dashboard.healthFactors}
       kpis={dashboard.kpis}
-      revenueTrend={dashboard.trend}
+      revenueTrend={performance}
+      trendSeries={trendSeries}
       insights={dashboard.insights}
       topCategories={dashboard.topCategories}
       stockAlerts={dashboard.stockAlerts}
       recentActivity={dashboard.recentActivity}
-      rangeControl={<DateRange range={range} onChange={setRange} />}
+      refreshing={busy}
+      rangeControl={<DashboardActions preset={preset} range={customRange} exporting={exporting} onPreset={selectPreset} onOpenCustom={openCustomRange} onRangeChange={setCustomRange} onApplyCustom={applyCustomRange} onExport={() => void handleExport()} />}
     /></Suspense> : !busy && analytics && <section className="analytics-setup-state">
-      <div className="setup-mark" aria-hidden="true">↗</div><div><p className="section-label">START WITH YOUR DATA</p><h2>Connect a dataset to see your sales picture.</h2><p>Choose a confirmed import and map its date, amount, and order columns. Soho Suite will show only the metrics supported by those rows.</p></div><RouteLink className="button-primary" to="/analytics">Set up analytics</RouteLink>
+      <div className="setup-mark" aria-hidden="true">↗</div><div><p className="section-label">Start with your data</p><h2>Connect a dataset to see your sales picture.</h2><p>Choose a confirmed import and map its date, amount, and order columns. Soho Suite will show only the metrics supported by those rows.</p></div><RouteLink className="button-primary" to="/analytics">Set up analytics</RouteLink>
     </section>}
 
     {!busy && !analytics && <section className="content-panel panel-pad"><EmptyState title="Overview could not be loaded" description="The backend did not return sales data. Check the request status and refresh this page." /></section>}
-    <button type="button" className="button-quiet refresh-button" onClick={() => setRefresh((current) => current + 1)} disabled={busy}>Refresh overview</button>
   </div>
+}
+
+export function DateRange({ range, onChange }: { range: { from: string; to: string }; onChange: (range: { from: string; to: string }) => void }) {
+  return <div className="date-range"><label>From<input type="date" value={range.from} max={range.to} onChange={(event) => onChange({ ...range, from: event.target.value })} /></label><label>To<input type="date" value={range.to} min={range.from} onChange={(event) => onChange({ ...range, to: event.target.value })} /></label></div>
 }
 
 export function MetricCard({ label, metric, format }: { label: string; metric: Metric<number>; format: (value: number) => string }) {
@@ -81,8 +166,20 @@ export function MetricStatus({ status }: { status: string }) {
   return <span className={`status-tag${kind}`}>{status.toLowerCase()}</span>
 }
 
-export function DateRange({ range, onChange }: { range: { from: string; to: string }; onChange: (range: { from: string; to: string }) => void }) {
-  return <div className="date-range"><label>From<input type="date" value={range.from} max={range.to} onChange={(event) => onChange({ ...range, from: event.target.value })} /></label><label>To<input type="date" value={range.to} min={range.from} onChange={(event) => onChange({ ...range, to: event.target.value })} /></label></div>
+function DashboardActions({ preset, range, exporting, onPreset, onOpenCustom, onRangeChange, onApplyCustom, onExport }: { preset: DashboardPreset | 'CUSTOM'; range: { from: string; to: string }; exporting: boolean; onPreset: (preset: DashboardPreset) => void; onOpenCustom: () => void; onRangeChange: (range: { from: string; to: string }) => void; onApplyCustom: () => void; onExport: () => void }) {
+  const presets: DashboardPreset[] = ['7D', '30D', 'QTD', 'YTD']
+  return <div className="flex flex-wrap items-center gap-2">
+    <div className="inline-flex rounded-xl border border-border bg-muted/60 p-1" aria-label="Dashboard date range">
+      {presets.map((item) => <button key={item} type="button" aria-pressed={preset === item} onClick={() => onPreset(item)} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${preset === item ? 'bg-surface text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}>{item}</button>)}
+      <button type="button" aria-pressed={preset === 'CUSTOM'} onClick={onOpenCustom} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${preset === 'CUSTOM' ? 'bg-surface text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}>Custom</button>
+    </div>
+    {preset === 'CUSTOM' && <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface p-2">
+      <DateRange range={range} onChange={onRangeChange} />
+      <Button onClick={onApplyCustom} disabled={!validRange(range.from, range.to)}>Apply</Button>
+      <span className="w-full px-1 text-xs text-muted-foreground">Choose dates covered by your imported sales, then apply to recalculate.</span>
+    </div>}
+    <Button variant="secondary" onClick={onExport} disabled={exporting} aria-label="Export dashboard analytics"><Download />{exporting ? 'Exporting…' : 'Export'}</Button>
+  </div>
 }
 
 export function ActivityLine({ event }: { event: ActivityEvent }) {
@@ -102,13 +199,10 @@ export function TrendChart({ values, currency }: { values: { date: string; sales
   return <div className="chart-wrap"><svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Daily imported sales trend. ${accessible}`} className="trend-chart"><line x1={inset} y1={height - inset} x2={width - inset} y2={height - inset} className="chart-axis"/><polyline points={points} className="chart-line" fill="none" />{values.length <= 31 && values.map((item, index) => { const x = inset + index * (width - inset * 2) / Math.max(values.length - 1, 1); const y = height - inset - ((item.salesAmount - min) / Math.max(max - min, 1)) * (height - inset * 2); return <circle key={item.date} cx={x} cy={y} r="3.5" className="chart-point"><title>{item.date}: {money(item.salesAmount, currency)}</title></circle> })}</svg><div className="chart-edge-labels"><span>{values[0]?.date}</span><span>{values.at(-1)?.date}</span></div></div>
 }
 
-function defaultRange() {
-  const to = new Date()
-  const from = new Date(to)
-  from.setDate(from.getDate() - 29)
-  return { from: localDate(from), to: localDate(to) }
-}
 function validRange(from: string, to: string) { const first = Date.parse(from + 'T00:00:00Z'); const last = Date.parse(to + 'T00:00:00Z'); return Number.isFinite(first) && Number.isFinite(last) && last >= first && (last - first) / 86400000 + 1 <= 366 }
-function localDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
+function formatDateRangeLabel(from: string, to: string) {
+  const format = (value: string) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${value}T12:00:00`))
+  return `${format(from)} – ${format(to)}`
+}
 function money(value: number, currency: string | null) { return currency ? new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value) : value.toLocaleString(undefined, { maximumFractionDigits: 2 }) }
 function errorText(error: unknown) { return error instanceof Error ? error.message : 'Could not load overview data.' }

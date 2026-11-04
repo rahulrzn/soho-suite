@@ -5,6 +5,10 @@ export function Modal({ title, description, children, onClose }: { title: string
   const dialogRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousBodyOverflow = document.body.style.overflow
+    const previousRootOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
     const firstControl = dialogRef.current?.querySelector<HTMLElement>('button, input, select, textarea, [href]')
     firstControl?.focus()
     function keydown(event: KeyboardEvent) {
@@ -16,7 +20,12 @@ export function Modal({ title, description, children, onClose }: { title: string
       else if (!event.shiftKey && document.activeElement === controls.at(-1)) { event.preventDefault(); controls[0]?.focus() }
     }
     document.addEventListener('keydown', keydown)
-    return () => { document.removeEventListener('keydown', keydown); previous?.focus() }
+    return () => {
+      document.removeEventListener('keydown', keydown)
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousRootOverflow
+      previous?.focus()
+    }
   }, [onClose])
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby={description ? 'modal-description' : undefined} ref={dialogRef}>

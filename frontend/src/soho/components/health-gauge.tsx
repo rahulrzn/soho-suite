@@ -62,7 +62,6 @@ export function HealthGauge({
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - pct)}
-          style={{ transition: "stroke-dashoffset 900ms cubic-bezier(.2,.7,.2,1)" }}
         />
         {/* tick marks at 25/50/75 */}
         {[0.25, 0.5, 0.75].map((t) => {

@@ -6,7 +6,7 @@ import { cn } from "../../lib/utils";
 export function Panel({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return (
     <section
-      className={cn("rounded-2xl border border-border bg-surface shadow-soft", className)}
+      className={cn("rounded-xl border border-border bg-surface", className)}
       {...props}
     />
   );
@@ -26,19 +26,19 @@ export function PanelHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("flex flex-wrap items-start justify-between gap-3 px-5 pt-5 pb-3", className)}>
+    <header className={cn("flex flex-wrap items-start justify-between gap-3 rounded-t-xl border-b border-border bg-surface-sunken/45 px-5 py-4 md:px-6 md:py-5", className)}>
       <div className="min-w-0">
-        {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        {eyebrow && <p className="mb-1 text-xs font-semibold text-primary">{eyebrow}</p>}
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
     </header>
   );
 }
 
 export function PanelBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-5 pb-5", className)} {...props} />;
+  return <div className={cn("px-5 pt-4 pb-5 md:px-6", className)} {...props} />;
 }
 
 export function PanelFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

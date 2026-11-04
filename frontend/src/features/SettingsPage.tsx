@@ -56,7 +56,7 @@ export function BusinessSettingsPage({ onError, onNotice }: PageCallbacks) {
   }
   return <div className="feature-stack">
     <PageHeader eyebrow="Workspace" title="Business settings" description="Update the profile details and defaults used across this business." />
-    <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">BUSINESS PROFILE</p><h2>Workspace details</h2><p>Changes are validated and stored by the Soho Suite backend.</p></div><span className="status-tag status-muted">{business.businessCode}</span></div>
+    <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">Business profile</p><h2>Workspace details</h2><p>Changes are validated and stored by the Soho Suite backend.</p></div><span className="status-tag status-muted">{business.businessCode}</span></div>
       {!editable && <Message variant="warning" text="You can view these details, but only an owner or manager can edit the business profile." />}
       <form className="form-grid form-stack" onSubmit={(event) => void submit(event)}>
         <label>Trading name<input name="tradingName" defaultValue={business.tradingName ?? business.company} required maxLength={255} disabled={!editable} /></label>
@@ -74,7 +74,7 @@ export function BusinessSettingsPage({ onError, onNotice }: PageCallbacks) {
         {editable && <div className="form-actions"><button className="button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save business details'}</button></div>}
       </form>
     </section>
-    <section className="content-panel panel-pad"><p className="section-label">ACCESS</p><h2>Membership controls</h2><p className="quiet-text">Team members, invitations, and ownership are managed in the Team section. The backend checks access for every request.</p><RouteLink className="button-secondary" to="/team">Open team settings</RouteLink></section>
+    <section className="content-panel panel-pad"><p className="section-label">Access</p><h2>Membership controls</h2><p className="quiet-text">Team members, invitations, and ownership are managed in the Team section. The backend checks access for every request.</p><RouteLink className="button-secondary" to="/team">Open team settings</RouteLink></section>
     {role === 'OWNER' && <section className="business-danger-zone"><div><h2>Delete this business</h2><p>This removes the workspace and its membership access. This action cannot be undone.</p></div><button className="button-danger" type="button" onClick={() => setConfirmDelete(true)}>Delete business workspace</button></section>}
     {confirmDelete && <ConfirmDialog title={`Delete ${business.tradingName || business.company}?`} description="This permanently removes the business workspace and its memberships. You will need another workspace or create a new one to continue." confirmLabel="Delete business" destructive busy={busy} onCancel={() => setConfirmDelete(false)} onConfirm={() => void removeBusiness()} />}
   </div>
@@ -83,6 +83,14 @@ export function BusinessSettingsPage({ onError, onNotice }: PageCallbacks) {
 export function ProfileSettingsPage({ onError, onNotice }: PageCallbacks) {
   const { profile, replaceProfile } = useWorkspace()
   const [busy, setBusy] = useState(false)
+  async function copyProfileId() {
+    try {
+      await navigator.clipboard.writeText(String(profile.id))
+      onNotice('Profile ID copied.')
+    } catch {
+      onError('Could not access the clipboard. Select the profile ID and copy it manually.')
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (busy) return
@@ -98,12 +106,14 @@ export function ProfileSettingsPage({ onError, onNotice }: PageCallbacks) {
     finally { setBusy(false) }
   }
   return <div className="feature-stack"><PageHeader eyebrow="Account" title="Profile settings" description="Manage the profile details connected to your secure sign-in account." /><section className="content-panel panel-pad settings-profile">
-    <div className="panel-heading"><div><p className="section-label">YOUR ACCOUNT</p><h2>Profile details</h2><p>Email is managed by Firebase Authentication and cannot be changed here.</p></div></div>
+    <div className="panel-heading"><div><p className="section-label">Your account</p><h2>Profile details</h2><p>Email is managed by Firebase Authentication and cannot be changed here.</p></div></div>
     <form className="form-grid form-stack" onSubmit={(event) => void submit(event)}>
       <label>First name<input name="firstName" defaultValue={profile.firstName} required autoComplete="given-name" /></label>
       <label>Last name<input name="lastName" defaultValue={profile.lastName} required autoComplete="family-name" /></label>
       <label>Phone <span className="optional-label">Optional</span><input name="phone" defaultValue={profile.phone ?? ''} autoComplete="tel" /></label>
       <label>Email<input value={profile.email} disabled /></label>
+      <div className="profile-id-field"><label>Profile ID<input value={profile.id} readOnly onFocus={(event) => event.currentTarget.select()} /></label><button className="button-secondary" type="button" onClick={() => void copyProfileId()}>Copy ID</button></div>
+      <p className="profile-id-note">Share this ID with a workspace owner so they can add you from Team → Add existing user.</p>
       <div className="form-actions"><button className="button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button></div>
     </form>
   </section></div>

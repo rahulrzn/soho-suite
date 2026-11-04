@@ -91,7 +91,7 @@ export function ExpensesScreen({ expenses, budget, byMonth, categories, onCreate
   ];
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Operations"
         title="Expenses"

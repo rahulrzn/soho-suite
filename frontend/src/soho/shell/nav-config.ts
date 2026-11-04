@@ -17,7 +17,6 @@ export interface NavItem {
   label: string;
   to: AppPath;
   icon: LucideIcon;
-  badge?: string;
 }
 
 export interface NavGroup {
@@ -36,7 +35,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Data",
     items: [
-      { label: "Datasets", to: "/datasets", icon: Database, badge: "1" },
+      { label: "Datasets", to: "/datasets", icon: Database },
       { label: "Reports", to: "/reports", icon: FileText },
     ],
   },
@@ -44,7 +43,7 @@ export const navGroups: NavGroup[] = [
     label: "Operations",
     items: [
       { label: "Expenses", to: "/expenses", icon: Receipt },
-      { label: "Inventory", to: "/inventory", icon: Boxes, badge: "3" },
+      { label: "Inventory", to: "/inventory", icon: Boxes },
     ],
   },
   {
@@ -59,5 +58,6 @@ export const navGroups: NavGroup[] = [
 
 export function isActivePath(current: string, to: string) {
   if (to === "/") return current === "/";
+  if (to === "/settings/business") return current.startsWith("/settings/");
   return current === to || current.startsWith(`${to}/`);
 }

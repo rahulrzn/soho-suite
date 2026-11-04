@@ -143,6 +143,7 @@ export function TrendChart({
                 strokeDasharray="4 4"
                 dot={false}
                 activeDot={{ r: 3 }}
+                isAnimationActive={false}
               />
             ) : (
               <Area
@@ -153,6 +154,7 @@ export function TrendChart({
                 strokeWidth={2.25}
                 fill={`url(#${gid}-${s.key})`}
                 activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--surface)" }}
+                isAnimationActive={false}
               />
             ),
           )}
@@ -194,6 +196,7 @@ export function StackedBarChart({
               stackId="a"
               fill={s.color}
               radius={i === series.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
+              isAnimationActive={false}
             />
           ))}
         </BarChart>
@@ -227,6 +230,7 @@ export function DonutChart({
             stroke="none"
             startAngle={90}
             endAngle={-270}
+            isAnimationActive={false}
           >
             {data.map((_, i) => (
               <Cell key={i} fill={chartColors[i % chartColors.length]} />

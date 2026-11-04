@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import type { User } from 'firebase/auth'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './firebase'
+import { BrandWordmark } from './soho/shell/logo'
 import { logout, sendVerificationEmail, signInWithEmail, signInWithGoogle, signUpWithEmail, sendPasswordReset } from './auth/authService'
 import { apiRequest, getDefaultApiBaseUrl } from './api/apiClient'
 import {
@@ -661,7 +662,7 @@ export default function WorkspaceApp() {
       <main className="auth-screen">
         <section className="auth-card">
           <a className="brand" href="#home">
-            <span className="brand-mark">S</span> soho<span>suite</span>
+            <BrandWordmark className="brand-wordmark-compact" />
           </a>
           <p className="overline">YOUR BUSINESS, IN FOCUS</p>
           <h1>{authMode === 'sign-in' ? 'Welcome back' : 'Create your account'}</h1>
@@ -1383,7 +1384,7 @@ export default function WorkspaceApp() {
 function Brand() {
   return (
     <a className="brand" href="#home">
-      <span className="brand-mark">S</span> soho<span>suite</span>
+      <BrandWordmark className="brand-wordmark-compact" />
     </a>
   )
 }
