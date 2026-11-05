@@ -205,6 +205,7 @@ export interface ActivityEvent {
   day: string;
   time: string;
   detail?: string;
+  isCurrentUser?: boolean;
 }
 
 export type DashboardActivityEvent = Pick<ActivityEvent, "id" | "module"> & Partial<Pick<ActivityEvent, "actor" | "actorInitials" | "action" | "target" | "day" | "time" | "detail">> & { summary?: string; occurredAt?: string };

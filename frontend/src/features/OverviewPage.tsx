@@ -14,7 +14,7 @@ import { formatApiError } from '../api/formatError'
 import { saveCsvDownload } from '../utils/download'
 import type { TrendPoint } from '../soho/types'
 import type { PageCallbacks } from './types'
-import { buildDashboardPresentation } from './dashboardMockupPresentation'
+import { buildDashboardPresentation } from './dashboardPresentation'
 import { buildDashboardPerformance, getDashboardDateRange, loadAllExpenses, type DashboardPreset } from './dashboardData'
 import { RequestSequence } from './requestSequence'
 
@@ -167,17 +167,40 @@ export function MetricStatus({ status }: { status: string }) {
 
 function DashboardActions({ preset, range, exporting, onPreset, onOpenCustom, onRangeChange, onApplyCustom, onExport }: { preset: DashboardPreset | 'CUSTOM'; range: { from: string; to: string }; exporting: boolean; onPreset: (preset: DashboardPreset) => void; onOpenCustom: () => void; onRangeChange: (range: { from: string; to: string }) => void; onApplyCustom: () => void; onExport: () => void }) {
   const presets: DashboardPreset[] = ['7D', '30D', 'QTD', 'YTD']
-  return <div className="flex flex-wrap items-center gap-2">
-    <div className="inline-flex rounded-xl border border-border bg-muted/60 p-1" aria-label="Dashboard date range">
-      {presets.map((item) => <button key={item} type="button" aria-pressed={preset === item} onClick={() => onPreset(item)} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${preset === item ? 'bg-surface text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}>{item}</button>)}
-      <button type="button" aria-pressed={preset === 'CUSTOM'} onClick={onOpenCustom} className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${preset === 'CUSTOM' ? 'bg-surface text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}>Custom</button>
+  return <div className="flex flex-wrap items-center gap-2.5">
+    <div className="inline-flex rounded-lg border border-border bg-surface-sunken p-1 shadow-xs" aria-label="Dashboard date range preset">
+      {presets.map((item) => (
+        <button
+          key={item}
+          type="button"
+          aria-pressed={preset === item}
+          onClick={() => onPreset(item)}
+          className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${preset === item ? 'bg-surface text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          {item}
+        </button>
+      ))}
+      <button
+        type="button"
+        aria-pressed={preset === 'CUSTOM'}
+        onClick={onOpenCustom}
+        className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${preset === 'CUSTOM' ? 'bg-surface text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
+      >
+        Custom
+      </button>
     </div>
-    {preset === 'CUSTOM' && <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface p-2">
-      <DateRange range={range} onChange={onRangeChange} />
-      <Button onClick={onApplyCustom} disabled={!validRange(range.from, range.to)}>Apply</Button>
-      <span className="w-full px-1 text-xs text-muted-foreground">Choose dates covered by your imported sales, then apply to recalculate.</span>
-    </div>}
-    <Button variant="secondary" onClick={onExport} disabled={exporting} aria-label="Export dashboard analytics"><Download />{exporting ? 'Exporting…' : 'Export'}</Button>
+    {preset === 'CUSTOM' && (
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface p-2.5 shadow-sm">
+        <DateRange range={range} onChange={onRangeChange} />
+        <Button size="sm" variant="primary" onClick={onApplyCustom} disabled={!validRange(range.from, range.to)}>
+          Apply
+        </Button>
+      </div>
+    )}
+    <Button variant="secondary" size="md" onClick={onExport} disabled={exporting} aria-label="Export dashboard analytics">
+      <Download className="size-4" />
+      <span>{exporting ? 'Exporting…' : 'Export'}</span>
+    </Button>
   </div>
 }
 

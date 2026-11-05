@@ -64,12 +64,12 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={cn("overflow-hidden", className)}>
+    <div className={cn("overflow-hidden rounded-xl border border-border bg-surface shadow-xs", className)}>
       <div className="scrollbar-thin overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">{caption}</caption>
           <thead>
-            <tr className="border-y border-border bg-surface-sunken/60">
+            <tr className="border-b border-border bg-surface-sunken/60">
               {columns.map((c) => {
                 const active = sort?.key === c.key;
                 return (
@@ -79,7 +79,7 @@ export function DataTable<T>({
                     style={{ width: c.width }}
                     aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
                     className={cn(
-                      "px-4 py-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground first:pl-5 last:pr-5",
+                      "px-4 py-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-muted-foreground first:pl-5 last:pr-5",
                       c.align === "right" && "text-right",
                       c.align === "center" && "text-center",
                       c.align !== "right" && c.align !== "center" && "text-left",
@@ -91,15 +91,15 @@ export function DataTable<T>({
                         type="button"
                         onClick={() => toggleSort(c.key)}
                         className={cn(
-                          "inline-flex items-center gap-1 rounded hover:text-foreground",
-                          active && "text-foreground",
+                          "inline-flex items-center gap-1.5 rounded-sm hover:text-foreground transition-colors",
+                          active && "text-foreground font-bold",
                         )}
                       >
                         {c.header}
                         {active ? (
-                          sort.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                          sort.dir === "asc" ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                         ) : (
-                          <ChevronsUpDown className="size-3 opacity-50" />
+                          <ChevronsUpDown className="size-3.5 opacity-40 hover:opacity-80" />
                         )}
                       </button>
                     ) : (
@@ -132,15 +132,15 @@ export function DataTable<T>({
                   aria-selected={onRowClick ? selected : undefined}
                   className={cn(
                     "border-b border-border transition-colors last:border-b-0",
-                    onRowClick && "cursor-pointer hover:bg-surface-sunken/70 focus-visible:bg-surface-sunken",
-                    selected && "bg-primary-soft/50 hover:bg-primary-soft/60",
+                    onRowClick && "cursor-pointer hover:bg-surface-sunken/60 focus-visible:bg-surface-sunken",
+                    selected && "bg-primary/10 hover:bg-primary/15 relative font-medium ring-1 ring-inset ring-primary/40",
                   )}
                 >
                   {columns.map((c) => (
                     <td
                       key={c.key}
                       className={cn(
-                        "px-4 py-3 align-middle first:pl-5 last:pr-5",
+                        "px-4 py-3.5 align-middle first:pl-5 last:pr-5 text-sm",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
                         c.hideBelow && hideClass[c.hideBelow],

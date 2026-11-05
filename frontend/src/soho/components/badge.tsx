@@ -5,23 +5,23 @@ import { cn } from "../../lib/utils";
 import type { Tone } from "../types";
 
 const toneClass: Record<Tone, string> = {
-  neutral: "bg-muted text-muted-foreground",
-  primary: "bg-primary-soft text-primary",
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning-foreground",
-  danger: "bg-destructive-soft text-destructive",
-  info: "bg-info-soft text-info",
-  accent: "bg-accent-soft text-accent-foreground",
+  neutral: "bg-surface-sunken text-muted-foreground border-border/80",
+  primary: "bg-primary/15 text-primary border-primary/30",
+  success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  warning: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  danger: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  info: "bg-sky-500/15 text-sky-300 border-sky-500/30",
+  accent: "bg-violet-500/15 text-violet-300 border-violet-500/30",
 };
 
 const dotClass: Record<Tone, string> = {
   neutral: "bg-muted-foreground",
   primary: "bg-primary",
-  success: "bg-success",
-  warning: "bg-warning",
-  danger: "bg-destructive",
-  info: "bg-info",
-  accent: "bg-accent",
+  success: "bg-emerald-400",
+  warning: "bg-amber-400",
+  danger: "bg-rose-400",
+  info: "bg-sky-400",
+  accent: "bg-violet-400",
 };
 
 export function Badge({
@@ -38,12 +38,21 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[0.72rem] font-semibold tracking-wide whitespace-nowrap select-none",
         toneClass[tone],
         className,
       )}
     >
-      {dot && <span aria-hidden className={cn("size-1.5 rounded-full", dotClass[tone])} />}
+      {dot && (
+        <span
+          aria-hidden
+          className={cn(
+            "size-1.5 shrink-0 rounded-full",
+            dotClass[tone],
+            (tone === "success" || tone === "primary") && "animate-pulse",
+          )}
+        />
+      )}
       {children}
     </span>
   );

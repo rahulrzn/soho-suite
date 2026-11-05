@@ -11,13 +11,13 @@ import {
 import { cn } from "../../lib/utils";
 
 const controlBase =
-  "w-full rounded-md border border-input bg-surface px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground hover:border-border-strong focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-destructive/15";
+  "w-full rounded-md border border-input bg-surface px-3 text-sm text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-border-strong focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-destructive/15";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...props },
   ref,
 ) {
-  return <input ref={ref} className={cn(controlBase, "h-10", className)} {...props} />;
+  return <input ref={ref} className={cn(controlBase, "h-9.5", className)} {...props} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
@@ -26,14 +26,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   },
 );
 
-/** Native select, styled. Swap for your design-system select if you have one. */
+/** Native select with styled container and chevron */
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { size_?: "sm" | "md" }>(
   function Select({ className, children, size_ = "md", ...props }, ref) {
     return (
       <div className={cn("relative", className)}>
         <select
           ref={ref}
-          className={cn(controlBase, "appearance-none pr-9", size_ === "sm" ? "h-8 text-xs" : "h-10")}
+          className={cn(controlBase, "appearance-none pr-9", size_ === "sm" ? "h-8 text-xs" : "h-9.5 text-sm")}
           {...props}
         >
           {children}
@@ -54,7 +54,7 @@ export function SearchInput({
   return (
     <div className={cn("relative", className)}>
       <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input type="search" className="h-9 pl-9" {...props} />
+      <Input type="search" className="h-9.5 pl-9" {...props} />
     </div>
   );
 }
@@ -78,13 +78,13 @@ export function Field({
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <label htmlFor={htmlFor} className="flex items-center justify-between text-sm font-medium text-foreground">
+      <label htmlFor={htmlFor} className="flex items-center justify-between text-xs font-semibold text-foreground">
         <span>{label}</span>
-        {optional && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
+        {optional && <span className="text-[0.7rem] font-normal text-muted-foreground">Optional</span>}
       </label>
       {children}
       {error ? (
-        <p className="text-xs text-destructive">{error}</p>
+        <p className="text-xs font-medium text-destructive">{error}</p>
       ) : hint ? (
         <p className="text-xs text-muted-foreground">{hint}</p>
       ) : null}
@@ -107,10 +107,10 @@ export function Switch({
   return (
     <div className="flex items-start justify-between gap-6">
       <div>
-        <label htmlFor={id} className="text-sm font-medium text-foreground">
+        <label htmlFor={id} className="text-sm font-semibold text-foreground">
           {label}
         </label>
-        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
       <button
         id={id}
@@ -119,13 +119,13 @@ export function Switch({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={cn(
-          "relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+          "relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           checked ? "bg-primary" : "bg-border-strong",
         )}
       >
         <span
           className={cn(
-            "inline-block size-4 rounded-full bg-surface shadow-soft transition-transform",
+            "inline-block size-4 rounded-full bg-surface shadow-xs transition-transform",
             checked ? "translate-x-4.5" : "translate-x-0.5",
           )}
         />
@@ -138,7 +138,7 @@ export function Checkbox({ className, ...props }: InputHTMLAttributes<HTMLInputE
   return (
     <input
       type="checkbox"
-      className={cn("size-4 rounded border-input accent-primary", className)}
+      className={cn("size-4 rounded border-input accent-primary transition-colors cursor-pointer", className)}
       {...props}
     />
   );

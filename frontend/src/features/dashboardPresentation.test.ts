@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AnalyticsOverview, HealthScore } from '../api/models'
-import { buildDashboardPresentation } from './dashboardMockupPresentation'
+import { buildDashboardPresentation } from './dashboardPresentation'
 
 const unavailable = { status: 'UNAVAILABLE' as const, value: null, reason: 'No mapped data' }
 

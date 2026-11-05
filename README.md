@@ -24,7 +24,7 @@ The frontend signs users in with Firebase Authentication and sends Firebase ID t
 
 ### 1. Configure PostgreSQL
 
-Create a PostgreSQL database named `sohosuite` (or change the JDBC URL in `backend/src/main/resources/application.properties`). Set the database credentials in the environment used to launch the backend:
+Create a PostgreSQL database named `sohosuite`. The default JDBC URL is `jdbc:postgresql://localhost:5432/sohosuite`; set `DB_URL` to override it for a hosted database. Set the credentials in the environment used to launch the backend:
 
 ```text
 DB_USERNAME=your_database_user
@@ -52,7 +52,7 @@ Use the values from your Firebase project settings. `VITE_FIREBASE_MEASUREMENT_I
 
 For the backend, set `FIREBASE_PROJECT_ID` to the same Firebase project ID and configure Google Application Default Credentials. For local development with a service-account key, set `GOOGLE_APPLICATION_CREDENTIALS` to its absolute file path. Keep the key outside the repository and never commit it. The backend rejects missing Firebase project configuration or unavailable Admin credentials at startup.
 
-By default, the API permits browser origins `http://localhost:5173` and `http://localhost:4173`. Set `CORS_ALLOWED_ORIGINS` to a comma-separated list when using another frontend origin, for example `http://localhost:5173,http://127.0.0.1:5173`.
+Set `CORS_ALLOWED_ORIGINS` to a comma-separated list of exact browser origins, such as `http://localhost:5173,http://localhost:4173` locally or the deployed frontend's HTTPS origin in production. When unset, browser origins are denied. Set `PORT` if the hosting platform assigns the service port dynamically; it defaults to `8080`.
 
 ### 3. Start the backend
 
@@ -63,7 +63,7 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
-On Windows PowerShell use `\.\mvnw.cmd spring-boot:run` from `backend`. The API listens on port `8080` by default.
+On Windows PowerShell use `.\mvnw.cmd spring-boot:run` from `backend`. The API listens on port `8080` by default (or `PORT` when set).
 
 ### 4. Start the frontend
 
@@ -121,7 +121,7 @@ Run from `backend/`:
 ./mvnw test
 ```
 
-On Windows, use `\.\mvnw.cmd` in place of `./mvnw`.
+On Windows, use `.\mvnw.cmd` in place of `./mvnw`.
 
 ## Further documentation
 

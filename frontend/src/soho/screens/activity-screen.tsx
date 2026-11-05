@@ -15,12 +15,12 @@ export interface ActivityScreenProps {
 
 const modules: ActivityModule[] = ["Datasets", "Expenses", "Inventory", "Reports", "Team", "Settings"];
 const moduleMeta: Record<ActivityModule, { icon: typeof Database; cls: string }> = {
-  Datasets: { icon: Database, cls: "bg-primary-soft text-primary" },
-  Expenses: { icon: Receipt, cls: "bg-accent-soft text-accent-foreground" },
-  Inventory: { icon: Boxes, cls: "bg-success-soft text-success" },
-  Reports: { icon: FileText, cls: "bg-info-soft text-info" },
-  Team: { icon: Users, cls: "bg-warning-soft text-warning-foreground" },
-  Settings: { icon: Settings, cls: "bg-muted text-muted-foreground" },
+  Datasets: { icon: Database, cls: "bg-blue-500/15 text-blue-400 border border-blue-500/25" },
+  Expenses: { icon: Receipt, cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25" },
+  Inventory: { icon: Boxes, cls: "bg-purple-500/15 text-purple-400 border border-purple-500/25" },
+  Reports: { icon: FileText, cls: "bg-sky-500/15 text-sky-400 border border-sky-500/25" },
+  Team: { icon: Users, cls: "bg-indigo-500/15 text-indigo-400 border border-indigo-500/25" },
+  Settings: { icon: Settings, cls: "bg-surface-sunken text-muted-foreground border border-border" },
 };
 
 export function ActivityScreen({ events }: ActivityScreenProps) {
@@ -112,25 +112,32 @@ export function ActivityScreen({ events }: ActivityScreenProps) {
                 {day}
               </h2>
               <ol className="relative px-5 pb-3">
-                <span aria-hidden className="absolute top-2 bottom-6 left-[2.35rem] w-px bg-border" />
+                <span aria-hidden className="absolute top-2 bottom-6 left-[2.375rem] w-px bg-border/80" />
                 {items.map((e) => {
                   const meta = moduleMeta[e.module];
                   const Icon = meta.icon;
                   return (
-                    <li key={e.id} className="relative flex gap-4 py-3">
-                      <span className={cn("relative z-[1] inline-flex size-8 shrink-0 items-center justify-center rounded-full ring-4 ring-surface", meta.cls)}>
+                    <li key={e.id} className="relative flex gap-4 py-3 items-center">
+                      <span className={cn("relative z-[1] inline-flex size-9 shrink-0 items-center justify-center rounded-lg shadow-2xs", meta.cls)}>
                         <Icon className="size-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-foreground">
-                          <span className="font-medium">{e.actor}</span> <span className="text-muted-foreground">{e.action}</span>{" "}
-                          <span className="font-medium">{e.target}</span>
-                        </p>
-                        {e.detail && <p className="mt-0.5 text-xs text-muted-foreground">{e.detail}</p>}
+                        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                          <span className="font-semibold text-foreground">{e.actor}</span>
+                          <span className="text-muted-foreground">{e.action}</span>
+                          {e.target && (
+                            <span className="inline-flex items-center rounded-md border border-border/80 bg-surface-sunken px-2 py-0.5 font-mono text-xs font-medium text-foreground">
+                              {e.target}
+                            </span>
+                          )}
+                        </div>
+                        {e.detail && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">{e.detail}</p>
+                        )}
                       </div>
-                      <div className="hidden shrink-0 items-center gap-2 sm:flex">
-                        <Avatar initials={e.actorInitials} size="sm" />
-                        <span className="num w-16 text-right text-xs text-muted-foreground">{e.time}</span>
+                      <div className="hidden shrink-0 items-center gap-3 sm:flex">
+                        <Avatar initials={e.actorInitials} size="sm" tone={e.isCurrentUser ? "brand" : "auto"} />
+                        <span className="num w-20 text-right text-xs text-muted-foreground">{e.time}</span>
                       </div>
                     </li>
                   );

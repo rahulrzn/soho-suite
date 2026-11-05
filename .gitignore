@@ -33,6 +33,14 @@ credentials/
 firebase-admin.json
 service-account*.json
 serviceAccountKey.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
 docs/environment-setup.md
 
 # Logs and temporary files

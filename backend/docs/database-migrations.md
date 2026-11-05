@@ -1,8 +1,9 @@
 # Database schema migrations
 
 Flyway owns schema changes. Hibernate is configured with `ddl-auto=none`, so it will not create,
-update, or validate the database schema. Database connection credentials continue to come from
-`DB_USERNAME` and `DB_PASSWORD`; keep them in the process environment, not in this repository.
+update, or validate the database schema. Database connection details come from `DB_URL` (defaulting
+to the local PostgreSQL URL), `DB_USERNAME`, and `DB_PASSWORD`; keep credentials in the process
+environment or deployment secret manager, not in this repository.
 
 ## Migration sequence
 
@@ -10,8 +11,8 @@ The migration sequence is `V1__initial_schema.sql`, `V2__relax_legacy_user_colum
 `V3__expand_business_model.sql`, `V4__enforce_case_insensitive_user_email_uniqueness.sql`,
 `V5__add_dataset_imports.sql`, `V6__add_business_memberships.sql`,
 `V7__add_dataset_request_fingerprint.sql`, `V8__create_dataset_analytics_config.sql`,
-`V9__add_mvp_operations.sql`, `V10__enforce_single_business_owner.sql`, and
-`V11__enforce_exactly_one_business_owner.sql`.
+`V9__add_mvp_operations.sql`, `V10__enforce_single_business_owner.sql`,
+`V11__enforce_exactly_one_business_owner.sql`, and `V12__add_business_health_inputs.sql`.
 On a genuinely empty database, application startup applies V1 onward in order. Startup therefore
 changes the database on a fresh installation. Do not run the backend against an existing non-empty
 schema without confirming its Flyway history and schema state. Flyway is the supported installation
@@ -59,6 +60,8 @@ Migrations below describe expected schema transitions, not the state of any part
   creating triggers if existing businesses do not already have exactly one owner; reconcile those
   records only under an explicitly reviewed plan. The deferred checks permit the two-step ownership
   swap inside one transaction while rejecting incomplete changes at commit.
+- **V12** adds business health input records with nonnegative financial amounts, bounded date ranges,
+  and one record per business and period.
 
 The application lowercases new emails. The index protects concurrent inserts and other writers.
 Hibernate schema validation is disabled (`ddl-auto=none`); Flyway owns schema changes. Before V4 on
@@ -145,8 +148,8 @@ use it to bypass the schema audit.
 These variables are process-scoped, so set them again in every new terminal. Use Java 25 (the Maven
 project targets Java 25). No Flyway CLI variables
 or standalone Flyway installation are needed for normal backend startup; Spring Boot runs Flyway from
-the project dependencies. Start PostgreSQL first. The database URL is configured as
-`jdbc:postgresql://localhost:5432/sohosuite` in `application.properties`.
+the project dependencies. Start PostgreSQL first. The database URL defaults to
+`jdbc:postgresql://localhost:5432/sohosuite`; set `DB_URL` to use another database endpoint.
 
 Set the database and Firebase values, then start from the backend directory:
 

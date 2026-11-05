@@ -70,17 +70,129 @@ export function ReportsPage({ onError, onNotice }: PageCallbacks) {
   }
 
   return <div className="feature-stack">
-    <PageHeader eyebrow="Reports" title="Download business data" description="Generate supported CSV exports from the current business. Reports are created when requested and are not stored." actions={<div className="date-range"><label>From<input type="date" value={range.from} max={range.to} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} /></label><label>To<input type="date" value={range.to} min={range.from} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} /></label></div>} />
-    {loadError && <div className="report-load-error"><Message variant="warning" text={`${loadError} Some exports may be unavailable until the choices load.`} /><button className="button-quiet button-small" type="button" onClick={() => void loadChoices()} disabled={loading}>Retry loading choices</button></div>}
-    {loading ? <section className="content-panel panel-pad"><LoadingLine text="Loading datasets and inventory choices…" /></section> : <div className="reports-grid">
-      <ExportPanel title="Analytics" description={`Mapped sales metrics for ${range.from} through ${range.to}. Analytics accepts up to 366 days.`} detail="CSV" busy={busy === 'analytics'} disabled={busy !== null || !isAnalyticsDateRangeValid(range.from, range.to)} onDownload={() => void download('analytics')} />
-      <ExportPanel title="Expenses" description="Expense records for the selected date range." detail="CSV" busy={busy === 'expenses'} disabled={busy !== null || !isDateRangeValid(range.from, range.to)} onDownload={() => void download('expenses')} />
-      <ExportPanel title="Expense summary" description="Totals grouped by currency and category for the selected dates." detail="CSV" busy={busy === 'expense-summary'} disabled={busy !== null || !isDateRangeValid(range.from, range.to)} onDownload={() => void download('expense-summary')} />
-      <ExportPanel title="Inventory" description="Current inventory items and quantities from the stock ledger." detail="CSV" busy={busy === 'inventory'} disabled={busy !== null} onDownload={() => void download('inventory')} />
-      <section className="content-panel report-panel"><div><span className="report-format">CSV</span><h2>Stock movements</h2><p>Movement history for all items, or narrow it to one item.</p></div><label>Inventory item<select value={itemId} onChange={(event) => setItemId(event.target.value)}><option value="">All inventory items</option>{items.map((item) => <option key={item.id} value={item.id}>{item.name}{item.sku ? ` · ${item.sku}` : ''}</option>)}</select></label><button className="button-secondary" disabled={busy !== null} onClick={() => void download('movements')}>{busy === 'movements' ? 'Preparing CSV…' : 'Download CSV'}</button></section>
-      <section className="content-panel report-panel"><div><span className="report-format">CSV</span><h2>Dataset rows</h2><p>Download parsed rows from one dataset in this business.</p></div>{datasets.length ? <label>Dataset<select value={datasetId} onChange={(event) => setDatasetId(event.target.value)}>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name}</option>)}</select></label> : <EmptyState title="No datasets available" description="Import a dataset before downloading its rows." />}<button className="button-secondary" disabled={!datasetId || busy !== null} onClick={() => void download('dataset-rows')}>{busy === 'dataset-rows' ? 'Preparing CSV…' : 'Download CSV'}</button></section>
-    </div>}
-    <p className="table-footnote">Only CSV exports currently supported by this business API are listed here. Date filters apply to analytics and expense exports; inventory and dataset exports use their supported API scope.</p>
+    <PageHeader
+      eyebrow="Reports"
+      title="Download business data"
+      description="Generate supported CSV data exports from the active business workspace. Reports are streamed live on request and not stored."
+      actions={
+        <div className="date-range flex items-end gap-2 bg-surface p-2 rounded-lg border border-border shadow-xs">
+          <label className="text-xs font-semibold text-muted-foreground">
+            From
+            <input className="mt-1" type="date" value={range.from} max={range.to} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} />
+          </label>
+          <label className="text-xs font-semibold text-muted-foreground">
+            To
+            <input className="mt-1" type="date" value={range.to} min={range.from} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} />
+          </label>
+        </div>
+      }
+    />
+    {loadError && (
+      <div className="report-load-error">
+        <Message variant="warning" text={`${loadError} Some exports may be unavailable until the choices load.`} />
+        <button className="button-quiet button-small" type="button" onClick={() => void loadChoices()} disabled={loading}>
+          Retry loading choices
+        </button>
+      </div>
+    )}
+    {loading ? (
+      <section className="content-panel panel-pad">
+        <LoadingLine text="Loading datasets and inventory choices…" />
+      </section>
+    ) : (
+      <div className="reports-grid">
+        <ExportPanel
+          title="Sales analytics"
+          description={`Mapped performance and sales metrics for ${range.from} through ${range.to}.`}
+          detail="CSV Export"
+          busy={busy === 'analytics'}
+          disabled={busy !== null || !isAnalyticsDateRangeValid(range.from, range.to)}
+          onDownload={() => void download('analytics')}
+        />
+        <ExportPanel
+          title="Operating expenses"
+          description={`Complete itemized operating cost records for ${range.from} through ${range.to}.`}
+          detail="CSV Export"
+          busy={busy === 'expenses'}
+          disabled={busy !== null || !isDateRangeValid(range.from, range.to)}
+          onDownload={() => void download('expenses')}
+        />
+        <ExportPanel
+          title="Expense summary"
+          description="Aggregated totals grouped by currency and operational category for the selected dates."
+          detail="CSV Export"
+          busy={busy === 'expense-summary'}
+          disabled={busy !== null || !isDateRangeValid(range.from, range.to)}
+          onDownload={() => void download('expense-summary')}
+        />
+        <ExportPanel
+          title="Stock inventory"
+          description="Current stock ledger balances and status for all catalogue items."
+          detail="CSV Export"
+          busy={busy === 'inventory'}
+          disabled={busy !== null}
+          onDownload={() => void download('inventory')}
+        />
+        <section className="content-panel report-panel hover:border-border-strong transition-all">
+          <div>
+            <span className="report-format">CSV Export</span>
+            <h2>Stock movements</h2>
+            <p>Comprehensive audit ledger of receipts, counts, and stock adjustments.</p>
+          </div>
+          <div className="space-y-3 pt-2">
+            <label className="block text-xs font-semibold text-muted-foreground">
+              Filter by item
+              <select
+                className="mt-1"
+                value={itemId}
+                onChange={(event) => setItemId(event.target.value)}
+              >
+                <option value="">All inventory items</option>
+                {items.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}{item.sku ? ` · ${item.sku}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="button-secondary w-full" disabled={busy !== null} onClick={() => void download('movements')}>
+              {busy === 'movements' ? 'Preparing CSV…' : 'Download CSV'}
+            </button>
+          </div>
+        </section>
+        <section className="content-panel report-panel hover:border-border-strong transition-all">
+          <div>
+            <span className="report-format">CSV Export</span>
+            <h2>Raw dataset rows</h2>
+            <p>Download stored rows and columns from an imported dataset in this workspace.</p>
+          </div>
+          <div className="space-y-3 pt-2">
+            {datasets.length ? (
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Select dataset
+                <select
+                  className="mt-1"
+                  value={datasetId}
+                  onChange={(event) => setDatasetId(event.target.value)}
+                >
+                  {datasets.map((dataset) => (
+                    <option key={dataset.id} value={dataset.id}>{dataset.name}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <EmptyState title="No datasets available" description="Import a dataset before downloading its rows." />
+            )}
+            <button className="button-secondary w-full" disabled={!datasetId || busy !== null} onClick={() => void download('dataset-rows')}>
+              {busy === 'dataset-rows' ? 'Preparing CSV…' : 'Download CSV'}
+            </button>
+          </div>
+        </section>
+      </div>
+    )}
+    <p className="table-footnote">
+      Only CSV exports supported by the backend API are listed here. Date filters apply to analytics and expense exports; inventory and dataset exports cover their full scope.
+    </p>
   </div>
 }
 

@@ -10,7 +10,8 @@ import { EmptyState, LoadingLine, Message } from '../components/Feedback'
 import { clearIdempotencyKey, resolveIdempotencyKey, type PendingOperation } from '../workspace/idempotency'
 import type { PageCallbacks } from './types'
 import { saveCsvDownload } from '../utils/download'
-import { PageHeader } from '../soho/components/misc'
+import { Copyable, PageHeader } from '../soho/components/misc'
+import { cn } from '../lib/utils'
 
 const pageSize = 20
 const movementTypes: InventoryMovementType[] = ['OPENING_STOCK', 'RECEIPT', 'ADJUSTMENT', 'DAMAGE', 'COUNT_CORRECTION']
@@ -107,20 +108,167 @@ export function InventoryPage({ onError, onNotice }: PageCallbacks) {
   }
 
   return <div className="feature-stack">
-    <PageHeader eyebrow="Operations · Inventory" title="Inventory" description="Manage item records and trace stock changes through the backend movement ledger." actions={<div className="inline-actions"><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('inventory')}>{downloadBusy ? 'Preparing CSV…' : 'Inventory CSV'}</button><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('movements')}>Movement CSV</button>{editable && <button className="button-primary" onClick={() => setModal('create')}>Add item <span aria-hidden="true">+</span></button>}</div>} />
+    <PageHeader eyebrow="Inventory catalogue" title="Inventory" description="Manage item records and trace stock changes through the backend movement ledger." actions={<div className="inline-actions"><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('inventory')}>{downloadBusy ? 'Preparing CSV…' : 'Inventory CSV'}</button><button className="button-secondary" disabled={downloadBusy} onClick={() => void download('movements')}>Movement CSV</button>{editable && <button className="button-primary" onClick={() => setModal('create')}>Add item</button>}</div>} />
     {!editable && <Message variant="warning" text="Your role can view inventory and movement history. An owner or manager can change stock." />}
     <div className="inventory-layout">
-      <section className="content-panel panel-pad inventory-list-panel"><div className="panel-heading"><div><p className="section-label">Items</p><h2>Inventory</h2><p>{total.toLocaleString()} items</p></div><label className="compact-filter">Show<select value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value as typeof activeFilter); setPage(0) }}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></select></label></div>
-        {loading ? <LoadingLine text="Loading inventory…" /> : items.length ? <div className="table-wrap"><table className="data-table inventory-table"><thead><tr><th>Item</th><th>On hand</th><th>Status</th></tr></thead><tbody>{items.map((item) => <tr key={item.id} className={selected?.id === item.id ? 'selected-row' : ''}><td><button className="inventory-item-link" onClick={() => { setSelected(item); setHistory([]); setHistoryTotal(0); setHistoryPage(0) }}><strong>{item.name}</strong><small>{item.sku || 'No SKU'}</small></button></td><td>{quantity(item.quantity)}</td><td><span className={item.active ? 'status-tag' : 'status-tag status-muted'}>{item.active ? 'Active' : 'Inactive'}</span></td></tr>)}</tbody></table></div> : <EmptyState title="No inventory items" description="Add an item with its opening quantity to start a stock ledger." action={editable ? <button className="button-primary" onClick={() => setModal('create')}>Add inventory item</button> : undefined} />}
-        <div className="pagination-row"><span>Page {page + 1} of {Math.max(1, Math.ceil(total / pageSize))}</span><div className="inline-actions"><button className="button-secondary button-small" disabled={loading || page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button><button className="button-secondary button-small" disabled={loading || (page + 1) * pageSize >= total} onClick={() => setPage((value) => value + 1)}>Next</button></div></div>
+      <section className="content-panel panel-pad inventory-list-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="section-label">Stock items</p>
+            <h2>Items catalogue</h2>
+            <p>{total.toLocaleString()} total items recorded</p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            Status
+            <select
+              className="rounded-md border border-input bg-surface px-2.5 py-1 text-xs text-foreground font-medium"
+              value={activeFilter}
+              onChange={(event) => { setActiveFilter(event.target.value as typeof activeFilter); setPage(0) }}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="all">All items</option>
+            </select>
+          </label>
+        </div>
+        {loading ? (
+          <LoadingLine text="Loading inventory items…" />
+        ) : items.length ? (
+          <div className="table-wrap">
+            <table className="data-table inventory-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="text-right">On hand</th>
+                  <th className="text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const isSelected = selected?.id === item.id;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={cn(
+                        "cursor-pointer transition-colors",
+                        isSelected ? "bg-primary-soft/50 font-medium" : "hover:bg-surface-sunken/60"
+                      )}
+                      onClick={() => { setSelected(item); setHistory([]); setHistoryTotal(0); setHistoryPage(0) }}
+                    >
+                      <td>
+                        <div className="space-y-0.5">
+                          <strong className="block text-sm font-semibold text-foreground">{item.name}</strong>
+                          <small className="block font-mono text-[0.68rem] text-muted-foreground">{item.sku || 'No SKU'}</small>
+                        </div>
+                      </td>
+                      <td className="text-right font-mono font-bold text-foreground">{quantity(item.quantity)}</td>
+                      <td className="text-right">
+                        <span className={item.active ? 'status-tag' : 'status-tag status-muted'}>
+                          {item.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            title="No inventory items"
+            description="Add an item with its opening quantity to start tracking stock."
+            action={editable ? <button className="button-primary" onClick={() => setModal('create')}>Add inventory item</button> : undefined}
+          />
+        )}
+        <div className="pagination-row">
+          <span>Page {page + 1} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+          <div className="inline-actions">
+            <button className="button-secondary button-small" disabled={loading || page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button>
+            <button className="button-secondary button-small" disabled={loading || (page + 1) * pageSize >= total} onClick={() => setPage((value) => value + 1)}>Next</button>
+          </div>
+        </div>
       </section>
-      <section className="content-panel panel-pad inventory-detail-panel">{selected ? <>
-        <div className="panel-heading"><div><p className="section-label">Item detail</p><h2>{selected.name}</h2><p>{selected.sku || 'No SKU'}{selected.description ? ' · ' + selected.description : ''}</p></div><span className="inventory-balance">{quantity(selected.quantity)}</span></div>
-        <div className="inline-actions item-actions">{editable && <><button className="button-secondary button-small" onClick={() => setModal('edit')}>Edit item</button><button className="button-primary button-small" onClick={() => setModal('movement')}>Record movement</button></>}</div>
-        <div className="panel-heading history-heading"><div><p className="section-label">Stock ledger</p><h3>Movement history</h3></div><span className="status-tag status-muted">{historyTotal} entries</span></div>
-        {history.length ? <ol className="movement-list">{history.map((movement) => <li key={movement.id}><span className="movement-mark" aria-hidden="true">{movement.quantityDelta >= 0 ? '+' : '−'}</span><div><strong>{label(movement.type)}</strong><span>{movement.reason}</span><small>{new Date(movement.occurredAt).toLocaleString()}</small></div><div className="movement-quantities"><strong>{movement.quantityDelta >= 0 ? '+' : ''}{quantity(movement.quantityDelta)}</strong><small>Balance {quantity(movement.resultingQuantity)}</small></div></li>)}</ol> : <EmptyState title="No movements yet" description="Opening stock and later changes appear here after the backend records them." />}
-        <div className="pagination-row"><span>Movement page {historyPage + 1}</span><div className="inline-actions"><button className="button-secondary button-small" disabled={historyPage === 0} onClick={() => setHistoryPage((value) => Math.max(0, value - 1))}>Previous</button><button className="button-secondary button-small" disabled={(historyPage + 1) * pageSize >= historyTotal} onClick={() => setHistoryPage((value) => value + 1)}>Next</button></div></div>
-      </> : <EmptyState title="Select an inventory item" description="Choose an item to inspect its current quantity and the history of stock movements." />}</section>
+
+      <section className="content-panel panel-pad inventory-detail-panel">
+        {selected ? (
+          <>
+            <div className="panel-heading border-b border-border/70 pb-4">
+              <div>
+                <p className="section-label">Selected item</p>
+                <h2>{selected.name}</h2>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  {selected.sku ? (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      SKU: <Copyable text={selected.sku}>{selected.sku}</Copyable>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No SKU assigned</span>
+                  )}
+                  {selected.description && (
+                    <span className="text-xs text-muted-foreground">· {selected.description}</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Current Stock</span>
+                <span className="num text-2xl font-bold text-primary">{quantity(selected.quantity)}</span>
+              </div>
+            </div>
+            {editable && (
+              <div className="inline-actions my-3 gap-2">
+                <button className="button-primary button-small" onClick={() => setModal('movement')}>Record stock movement</button>
+                <button className="button-secondary button-small" onClick={() => setModal('edit')}>Edit item</button>
+              </div>
+            )}
+            <div className="panel-heading history-heading mt-2">
+              <div>
+                <p className="section-label">Stock ledger</p>
+                <h3>Movement history</h3>
+              </div>
+              <span className="status-tag status-muted">{historyTotal} recorded entries</span>
+            </div>
+            {history.length ? (
+              <ol className="movement-list divide-y divide-border">
+                {history.map((movement) => (
+                  <li key={movement.id} className="py-3 hover:bg-surface-sunken/40 transition-colors px-1 rounded-sm">
+                    <span
+                      className={cn(
+                        "movement-mark",
+                        movement.quantityDelta >= 0 ? "text-success bg-success-soft" : "text-destructive bg-destructive-soft"
+                      )}
+                      aria-hidden="true"
+                    >
+                      {movement.quantityDelta >= 0 ? '+' : '−'}
+                    </span>
+                    <div className="space-y-0.5">
+                      <strong className="text-xs font-semibold text-foreground">{label(movement.type)}</strong>
+                      <span className="text-xs text-muted-foreground block">{movement.reason}</span>
+                      <small className="text-[0.68rem] text-muted-foreground block">{new Date(movement.occurredAt).toLocaleString()}</small>
+                    </div>
+                    <div className="movement-quantities text-right">
+                      <strong className={cn("font-mono text-sm font-bold", movement.quantityDelta >= 0 ? "text-success" : "text-destructive")}>
+                        {movement.quantityDelta >= 0 ? '+' : ''}{quantity(movement.quantityDelta)}
+                      </strong>
+                      <small className="font-mono text-[0.7rem] text-muted-foreground block">Balance: {quantity(movement.resultingQuantity)}</small>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <EmptyState title="No movements yet" description="Opening stock and later stock adjustments will appear here." />
+            )}
+            <div className="pagination-row pt-2">
+              <span>Movement page {historyPage + 1}</span>
+              <div className="inline-actions">
+                <button className="button-secondary button-small" disabled={historyPage === 0} onClick={() => setHistoryPage((value) => Math.max(0, value - 1))}>Previous</button>
+                <button className="button-secondary button-small" disabled={(historyPage + 1) * pageSize >= historyTotal} onClick={() => setHistoryPage((value) => value + 1)}>Next</button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <EmptyState title="Select an inventory item" description="Choose an item from the list to inspect its stock level and ledger history." />
+        )}
+      </section>
     </div>
     {modal === 'create' && <ItemForm title="Add inventory item" item={null} busy={busy} onClose={() => setModal(null)} onSubmit={saveItem} />}
     {modal === 'edit' && selected && <ItemForm title="Edit inventory item" item={selected} busy={busy} onClose={() => setModal(null)} onSubmit={saveItem} />}

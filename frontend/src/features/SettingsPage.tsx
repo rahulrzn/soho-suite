@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { deleteBusiness, updateBusiness } from '../api/businessApi'
-import { updateProfile } from '../api/userApi'
+import { updateProfile, type UpdateProfile } from '../api/userApi'
 import { formatApiError } from '../api/formatError'
 import { useWorkspace } from '../app/WorkspaceContext'
 import { RouteLink } from '../app/navigation'
@@ -55,27 +55,62 @@ export function BusinessSettingsPage({ onError, onNotice }: PageCallbacks) {
     finally { setBusy(false) }
   }
   return <div className="feature-stack">
-    <PageHeader eyebrow="Workspace" title="Business settings" description="Update the profile details and defaults used across this business." />
-    <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">Business profile</p><h2>Workspace details</h2><p>Changes are validated and stored by the Soho Suite backend.</p></div><span className="status-tag status-muted">{business.businessCode}</span></div>
+    <PageHeader eyebrow="Workspace" title="Business settings" description="Update profile information, legal business structure, and default currency for this business." />
+    <section className="content-panel panel-pad">
+      <div className="panel-heading border-b border-border/70 pb-4">
+        <div>
+          <p className="section-label">Business profile</p>
+          <h2>Workspace details</h2>
+          <p>Values are validated and stored by the Soho Suite backend.</p>
+        </div>
+        <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-md bg-surface-sunken text-muted-foreground border border-border/60">
+          Code: {business.businessCode}
+        </span>
+      </div>
       {!editable && <Message variant="warning" text="You can view these details, but only an owner or manager can edit the business profile." />}
-      <form className="form-grid form-stack" onSubmit={(event) => void submit(event)}>
+      <form className="form-grid form-stack pt-2" onSubmit={(event) => void submit(event)}>
         <label>Trading name<input name="tradingName" defaultValue={business.tradingName ?? business.company} required maxLength={255} disabled={!editable} /></label>
         <label>Legal business name<input name="legalBusinessName" defaultValue={business.legalBusinessName ?? ''} maxLength={255} disabled={!editable} /></label>
         <label>Business type<select name="businessType" defaultValue={business.businessType ?? ''} disabled={!editable}><option value="">Not set</option><option value="RETAIL">Retail</option><option value="MANUFACTURING">Manufacturing</option><option value="SERVICES">Services</option></select></label>
         <label>Legal structure<select name="legalStructure" defaultValue={business.legalStructure ?? ''} disabled={!editable}><option value="">Not set</option><option value="SOLE_PROPRIETORSHIP">Sole proprietorship</option><option value="PARTNERSHIP">Partnership</option><option value="PRIVATE_LIMITED">Private limited</option></select></label>
         <label>Industry<input name="industry" defaultValue={business.industry ?? ''} maxLength={255} disabled={!editable} /></label>
         <label>Business email<input name="businessEmail" type="email" defaultValue={business.businessEmail ?? ''} maxLength={255} disabled={!editable} /></label>
-        <label>Currency code<input name="businessCurrency" defaultValue={business.businessCurrency ?? ''} pattern="[A-Za-z]{3}" maxLength={3} required disabled={!editable} /><small>Amounts are not converted when the currency changes.</small></label>
+        <label>
+          Currency code
+          <input className="font-mono uppercase" name="businessCurrency" defaultValue={business.businessCurrency ?? ''} pattern="[A-Za-z]{3}" maxLength={3} required disabled={!editable} />
+          <small className="text-muted-foreground">Amounts are not converted when the currency changes.</small>
+        </label>
         <label>Financial year starts in<select name="financialYearStartMonth" defaultValue={business.financialYearStartMonth ?? 1} disabled={!editable}>{Array.from({ length: 12 }, (_, index) => <option value={index + 1} key={index}>{new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2025, index, 1))}</option>)}</select></label>
         <label>Country<input name="country" defaultValue={business.country ?? ''} maxLength={255} disabled={!editable} /></label>
         <label>State or region<input name="state" defaultValue={business.state ?? ''} maxLength={255} disabled={!editable} /></label>
         <label>City<input name="city" defaultValue={business.city ?? ''} maxLength={255} disabled={!editable} /></label>
         <label>Postal code<input name="pincode" defaultValue={business.pincode ?? ''} maxLength={255} disabled={!editable} /></label>
-        {editable && <div className="form-actions"><button className="button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save business details'}</button></div>}
+        {editable && (
+          <div className="form-actions pt-2">
+            <button className="button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save business details'}</button>
+          </div>
+        )}
       </form>
     </section>
-    <section className="content-panel panel-pad"><p className="section-label">Access</p><h2>Membership controls</h2><p className="quiet-text">Team members, invitations, and ownership are managed in the Team section. The backend checks access for every request.</p><RouteLink className="button-secondary" to="/team">Open team settings</RouteLink></section>
-    {role === 'OWNER' && <section className="business-danger-zone"><div><h2>Delete this business</h2><p>This removes the workspace and its membership access. This action cannot be undone.</p></div><button className="button-danger" type="button" onClick={() => setConfirmDelete(true)}>Delete business workspace</button></section>}
+
+    <section className="content-panel panel-pad flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <p className="section-label">Access & Team</p>
+        <h2>Membership controls</h2>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Team members, invitations, and workspace ownership are managed in the Team section.</p>
+      </div>
+      <RouteLink className="button-secondary shrink-0" to="/team">Open team settings</RouteLink>
+    </section>
+
+    {role === 'OWNER' && (
+      <section className="business-danger-zone rounded-xl border border-destructive/30 bg-destructive-soft/30 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-destructive">Delete this business workspace</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">This permanently removes the workspace and all its data. This action cannot be undone.</p>
+        </div>
+        <button className="button-danger shrink-0" type="button" onClick={() => setConfirmDelete(true)}>Delete business workspace</button>
+      </section>
+    )}
     {confirmDelete && <ConfirmDialog title={`Delete ${business.tradingName || business.company}?`} description="This permanently removes the business workspace and its memberships. You will need another workspace or create a new one to continue." confirmLabel="Delete business" destructive busy={busy} onCancel={() => setConfirmDelete(false)} onConfirm={() => void removeBusiness()} />}
   </div>
 }
@@ -95,10 +130,11 @@ export function ProfileSettingsPage({ onError, onNotice }: PageCallbacks) {
     event.preventDefault()
     if (busy) return
     const form = new FormData(event.currentTarget)
-    const body = {
+    const phone = String(form.get('phone') ?? '').trim()
+    const body: UpdateProfile = {
       firstName: String(form.get('firstName')).trim(),
       lastName: String(form.get('lastName')).trim(),
-      phone: String(form.get('phone')).trim(),
+      ...(phone ? { phone } : {}),
     }
     setBusy(true); onError('')
     try { replaceProfile(await updateProfile(body)); onNotice('Profile details saved.') }
@@ -112,8 +148,7 @@ export function ProfileSettingsPage({ onError, onNotice }: PageCallbacks) {
       <label>Last name<input name="lastName" defaultValue={profile.lastName} required autoComplete="family-name" /></label>
       <label>Phone <span className="optional-label">Optional</span><input name="phone" defaultValue={profile.phone ?? ''} autoComplete="tel" /></label>
       <label>Email<input value={profile.email} disabled /></label>
-      <div className="profile-id-field"><label>Profile ID<input value={profile.id} readOnly onFocus={(event) => event.currentTarget.select()} /></label><button className="button-secondary" type="button" onClick={() => void copyProfileId()}>Copy ID</button></div>
-      <p className="profile-id-note">Share this ID with a workspace owner so they can add you from Team → Add existing user.</p>
+      <div className="profile-id-field"><label>Profile ID<input value={profile.id} readOnly title="Share this ID with a workspace owner to join a team" onFocus={(event) => event.currentTarget.select()} /></label><button className="button-secondary" type="button" onClick={() => void copyProfileId()}>Copy ID</button></div>
       <div className="form-actions"><button className="button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button></div>
     </form>
   </section></div>

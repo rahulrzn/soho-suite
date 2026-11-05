@@ -111,36 +111,113 @@ export function AnalyticsPage({ onError, onNotice }: PageCallbacks) {
   return <div className="feature-stack">
     <AnalyticsScreen businessName={business.tradingName || business.company} dateLabel={`${range.from} to ${range.to}`} currency={overview?.currency ?? business.businessCurrency} metrics={screenMetrics} dailyTrend={overview?.dailySalesTrend ?? { status: 'UNAVAILABLE', value: null, reason: 'Analytics have not returned for this period yet.' }} sharedDataReason={sharedDataReason} loading={dateBusy} rangeControl={<DateRange range={range} onChange={setRange} />} exportBusy={downloadBusy} onExport={() => void downloadAnalytics()} />
     <section className="content-panel panel-pad">
-      <div className="panel-heading"><div><p className="section-label">Source dataset</p><h2>Choose what analytics reads</h2><p>The backend reads confirmed imports only. Column names must match the reviewed dataset.</p></div>{configured && <span className="status-tag">Configured</span>}</div>
+      <div className="panel-heading">
+        <div>
+          <p className="section-label">Source dataset</p>
+          <h2>Choose what analytics reads</h2>
+          <p>The backend reads confirmed imports only. Column names must match the reviewed dataset.</p>
+        </div>
+        {configured && <span className="status-tag">Configured</span>}
+      </div>
       {!canConfigure && <Message variant="warning" text="Your role can view analytics, but only an owner or manager can change the source mapping." />}
-      {canConfigure ? <form className="analytics-config-form" onSubmit={(event) => void saveConfiguration(event)}>
-        <label>Confirmed dataset<select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setMapping((value) => ({ ...value, dateColumn: '', lineAmountColumn: '', orderIdColumn: '', customerIdColumn: '' })) }}><option value="">Select an imported dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} Â· {dataset.rowCount.toLocaleString()} rows</option>)}</select></label>
-        {!datasets.length && <p className="quiet-text">Import and confirm a dataset before configuring analytics.</p>}
-        {selectedId && detail && <div className="mapping-grid">
+      {canConfigure ? <form className="analytics-config-form space-y-4" onSubmit={(event) => void saveConfiguration(event)}>
+        <label className="block text-xs font-semibold text-foreground">
+          Confirmed dataset
+          <select className="mt-1 block w-full rounded-md border border-input bg-surface px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setMapping((value) => ({ ...value, dateColumn: '', lineAmountColumn: '', orderIdColumn: '', customerIdColumn: '' })) }}>
+            <option value="">Select an imported dataset</option>
+            {datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.name} · {dataset.rowCount.toLocaleString()} rows</option>)}
+          </select>
+        </label>
+        {!datasets.length && <p className="text-xs text-muted-foreground">Import and confirm a dataset before configuring analytics.</p>}
+        {selectedId && detail && <div className="mapping-grid grid grid-cols-1 gap-4 sm:grid-cols-2 pt-2">
           {mappingField('Date column', 'dateColumn', mapping, setMapping, columns, ['lineAmountColumn', 'orderIdColumn', 'customerIdColumn'])}
           {mappingField('Line amount column', 'lineAmountColumn', mapping, setMapping, columns, ['dateColumn', 'orderIdColumn', 'customerIdColumn'])}
           {mappingField('Order ID column', 'orderIdColumn', mapping, setMapping, columns, ['dateColumn', 'lineAmountColumn', 'customerIdColumn'])}
           {mappingField('Customer ID column', 'customerIdColumn', mapping, setMapping, columns, ['dateColumn', 'lineAmountColumn', 'orderIdColumn'], true)}
-          <label>Confirm business currency<input value={mapping.confirmedCurrency} maxLength={3} pattern="[A-Z]{3}" onChange={(event) => setMapping((value) => ({ ...value, confirmedCurrency: event.target.value.toUpperCase() }))} required aria-describedby="currency-confirm-help" /></label>
-          <p className="mapping-help" id="currency-confirm-help">Amounts are not converted. If the business currency changes, confirm this mapping again.</p>
+          <label className="block text-xs font-semibold text-foreground">
+            Confirm business currency
+            <input className="mt-1 block w-full rounded-md border border-input bg-surface px-3 py-2 text-sm font-mono text-foreground uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={mapping.confirmedCurrency} maxLength={3} pattern="[A-Z]{3}" onChange={(event) => setMapping((value) => ({ ...value, confirmedCurrency: event.target.value.toUpperCase() }))} required aria-describedby="currency-confirm-help" />
+          </label>
+          <p className="mapping-help text-xs text-muted-foreground self-end pb-1" id="currency-confirm-help">Amounts are not converted. If the business currency changes, confirm this mapping again.</p>
         </div>}
-        {selectedId && !detail && <LoadingLine text="Loading the datasetâ€™s reviewed column namesâ€¦" />}
-        <div className="form-actions"><button className="button-primary" disabled={!canConfigure || !detail || configBusy}>{configBusy ? 'Saving mappingâ€¦' : 'Save analytics mapping'}</button></div>
-      </form> : <p className="quiet-text">The current source dataset is shown through the returned analytics response when available.</p>}
+        {selectedId && !detail && <LoadingLine text="Loading the dataset's reviewed column names…" />}
+        <div className="form-actions pt-2">
+          <button className="button-primary" disabled={!canConfigure || !detail || configBusy}>
+            {configBusy ? 'Saving mapping…' : 'Save analytics mapping'}
+          </button>
+        </div>
+      </form> : <p className="text-xs text-muted-foreground">The current source dataset is shown through the returned analytics response when available.</p>}
     </section>
 
     {!dateBusy && overview ? <>
-      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">Data quality and coverage</p><h2>Metric availability</h2><p>{overview.datasetName ? 'Source: ' + overview.datasetName : 'No analytics dataset is configured for this business.'} Â· {overview.from} to {overview.to}</p></div></div>
-        <div className="availability-list">{[
-          ['Imported sales', overview.totalSalesAmount], ['Orders', overview.distinctOrderCount], ['Average order value', overview.averageOrderValue], ['Customers', overview.distinctCustomerCount], ['Daily sales trend', overview.dailySalesTrend], ['Sales change', overview.salesChangePercent],
-        ].map(([name, metric]) => { const result = metric as { status: string; reason: string | null }; return <div className="availability-row" key={name as string}><strong>{name as string}</strong><MetricStatus status={result.status} />{result.reason && !isAnalyticsReasonShared(result.reason, sharedDataReason) && <span>{result.reason}</span>}</div> })}</div>
+      <section className="content-panel panel-pad">
+        <div className="panel-heading">
+          <div>
+            <p className="section-label">Data quality and coverage</p>
+            <h2>Metric availability</h2>
+            <p>{overview.datasetName ? 'Source: ' + overview.datasetName : 'No analytics dataset is configured for this business.'} · {overview.from} to {overview.to}</p>
+          </div>
+        </div>
+        <div className="availability-list divide-y divide-border">
+          {[
+            ['Imported sales', overview.totalSalesAmount],
+            ['Orders', overview.distinctOrderCount],
+            ['Average order value', overview.averageOrderValue],
+            ['Customers', overview.distinctCustomerCount],
+            ['Daily sales trend', overview.dailySalesTrend],
+            ['Sales change', overview.salesChangePercent],
+          ].map(([name, metric]) => {
+            const result = metric as { status: string; reason: string | null };
+            return (
+              <div className="availability-row flex items-center justify-between py-2.5 text-xs sm:text-sm" key={name as string}>
+                <span className="font-semibold text-foreground">{name as string}</span>
+                <div className="flex items-center gap-2">
+                  <MetricStatus status={result.status} />
+                  {result.reason && !isAnalyticsReasonShared(result.reason, sharedDataReason) && (
+                    <span className="text-xs text-muted-foreground">{result.reason}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
-      <section className="content-panel panel-pad"><div className="panel-heading"><div><p className="section-label">Health score</p><h2>Sales change indicator</h2></div>{score?.status === 'AVAILABLE' && score.score !== null ? <span className="score-badge">{score.score} / 100</span> : <span className="status-tag status-muted">{score?.status?.toLowerCase() ?? 'unavailable'}</span>}</div>
-        {score?.interpretation && <p className="score-copy">{score.interpretation}</p>}
-        {score?.components?.length ? <details className="score-method"><summary>How the score is calculated</summary>{score.components.map((component) => <div key={component.name}><strong>{component.name}</strong><span>{component.weightPercent}% of the score · {component.inputStatus.toLowerCase()}</span><p>{component.formula}</p>{component.reason && <small>{component.reason}</small>}</div>)}</details> : null}
-        {score?.limitations && <p className="data-footnote">{score.limitations}</p>}
+      <section className="content-panel panel-pad">
+        <div className="panel-heading">
+          <div>
+            <p className="section-label">Health score</p>
+            <h2>Sales change indicator</h2>
+          </div>
+          {score?.status === 'AVAILABLE' && score.score !== null ? (
+            <span className="status-tag">{score.score} / 100</span>
+          ) : (
+            <span className="status-tag status-muted">{score?.status?.toLowerCase() ?? 'unavailable'}</span>
+          )}
+        </div>
+        {score?.interpretation && <p className="text-sm leading-relaxed text-foreground/90 font-medium mb-3">{score.interpretation}</p>}
+        {score?.components?.length ? (
+          <details className="score-method rounded-lg border border-border bg-surface-sunken/40 p-3 text-xs">
+            <summary className="font-semibold text-foreground cursor-pointer">How the score is calculated</summary>
+            <div className="mt-2.5 space-y-2 border-t border-border/60 pt-2">
+              {score.components.map((component) => (
+                <div key={component.name} className="space-y-0.5">
+                  <div className="flex justify-between font-medium text-foreground">
+                    <span>{component.name}</span>
+                    <span className="text-muted-foreground">{component.weightPercent}% weight</span>
+                  </div>
+                  <p className="font-mono text-[0.7rem] text-muted-foreground">{component.formula}</p>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
+        {score?.limitations && <p className="table-footnote">{score.limitations}</p>}
       </section>
-    </> : !dateBusy ? <section className="content-panel panel-pad"><EmptyState title="Analytics could not be loaded" description="The backend did not return analytics for this date range. Check the request status and try again." /></section> : null}
+    </> : !dateBusy ? (
+      <section className="content-panel panel-pad">
+        <EmptyState title="Analytics could not be loaded" description="The backend did not return analytics for this date range. Check the request status and try again." />
+      </section>
+    ) : null}
   </div>
 }
 

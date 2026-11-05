@@ -3,13 +3,14 @@ import type { Business, BusinessRole, UserProfile } from '../../api/models'
 import { AppShell } from './app-shell'
 import type { CurrentUser, Role } from '../types'
 
-export function ProductionAppShell({ children, profile, businesses, business, role, onSelectBusiness, onSignOut }: {
+export function ProductionAppShell({ children, profile, businesses, business, role, onSelectBusiness, onCreateWorkspace, onSignOut }: {
   children: ReactNode
   profile: UserProfile
   businesses: Business[]
   business: Business
   role: BusinessRole | ''
   onSelectBusiness: (id: number) => void
+  onCreateWorkspace: (name: string) => Promise<void>
   onSignOut: () => void
 }) {
   const currentUser: CurrentUser = {
@@ -24,6 +25,7 @@ export function ProductionAppShell({ children, profile, businesses, business, ro
     businesses={businesses.map((item) => ({ id: item.id, name: item.tradingName || item.company }))}
     businessId={business.id}
     onSelectBusiness={onSelectBusiness}
+    onCreateWorkspace={onCreateWorkspace}
     onSignOut={onSignOut}
   >{children}</AppShell>
 }

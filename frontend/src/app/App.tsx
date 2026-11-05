@@ -9,6 +9,7 @@ import { getDefaultApiBaseUrl } from '../api/apiClient'
 import { listBusinesses, listMembers } from '../api/businessApi'
 import type { Business, BusinessMember, BusinessRole, UserProfile } from '../api/models'
 import { createBusiness } from '../api/businessApi'
+import { createWorkspaceRequest } from '../workspace/createWorkspaceRequest'
 import { createProfile } from '../api/userApi'
 import { getMyProfile } from '../api/userApi'
 import { getCurrentFirebaseUser, logout, sendPasswordReset, sendVerificationEmail, signInWithEmail, signInWithGoogle, signUpWithEmail } from '../auth/authService'
@@ -30,6 +31,7 @@ const activeBusinessStorageKey = 'sohosuite.active-business-id'
 
 export default function App() {
   const location = useCurrentPath()
+  const isAcceptanceRoute = location.route.name === 'invitation-accept' || location.route.name === 'ownership-accept'
   const isIntegration = location.route.name === 'integration' || new URLSearchParams(location.search).get('tools') === 'integration'
   const [user, setUser] = useState<User | null>(() => getCurrentFirebaseUser())
   const [authLoading, setAuthLoading] = useState(true)
@@ -42,6 +44,12 @@ export default function App() {
   const [pageNotice, setPageNotice] = useState('')
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const toastSequence = useRef(0)
+
+  useEffect(() => {
+    // Safety check: ensure scroll is never trapped across page navigations
+    document.body.style.overflow = ''
+    document.documentElement.style.overflow = ''
+  }, [location.route.name])
   const [busy, setBusy] = useState(false)
 
   const pushToast = useCallback((variant: ToastItem['variant'], text: string) => {
@@ -139,6 +147,14 @@ export default function App() {
     setPageNotice('')
   }, [user])
 
+  async function handleCreateWorkspace(name: string) {
+    if (!activeBusiness) throw new Error('No active workspace is available to copy settings from.')
+    const created = await createBusiness(createWorkspaceRequest(name, activeBusiness))
+    setBusinesses((current) => [created, ...current.filter((item) => item.id !== created.id)])
+    selectBusiness(created.id)
+    pushToast('success', `${created.tradingName || created.company} workspace created.`)
+  }
+
   const role = useMemo<BusinessRole | ''>(() => {
     if (!profile) return ''
     return members.find((member) => member.userId === profile.id)?.role ?? ''
@@ -168,25 +184,57 @@ export default function App() {
     try { await action() } catch (error) { setPageError(errorMessage(error)) } finally { setBusy(false) }
   }
 
+  const handleSkipProfileSetup = () => {
+    const emailPrefix = (user?.email?.split('@')[0] || 'business_owner').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 30)
+    void withBusy(async () => {
+      const created = await createProfile({
+        username: emailPrefix || 'owner',
+        firstName: user?.displayName?.split(' ')[0] || 'Business',
+        lastName: user?.displayName?.split(' ').slice(1).join(' ') || 'Owner',
+      })
+      setProfile(created)
+      await loadWorkspace()
+    })
+  }
+
+  const handleSkipBusinessSetup = () => {
+    const defaultName = profile?.firstName ? `${profile.firstName}'s Workspace` : 'My Workspace'
+    void withBusy(async () => {
+      await createBusiness({
+        company: defaultName,
+        tradingName: defaultName,
+        businessCurrency: 'USD',
+        businessType: 'SERVICES',
+        financialYearStartMonth: 1,
+      })
+      setPageNotice('Welcome! Your default workspace has been initialized.')
+      await loadWorkspace()
+    })
+  }
+
   if (firebaseConfigurationError) return <ConfigurationScreen title="Firebase setup required" message={firebaseConfigurationError} />
   try { getDefaultApiBaseUrl() } catch (error) { return <ConfigurationScreen title="Backend setup required" message={errorMessage(error)} /> }
   if (authLoading) return <CenteredState title="Opening your workspace" message="Checking your secure sign-in session…" loading />
   if (isIntegration) return <IntegrationDashboard />
   if (!user) return <AuthScreen onError={setPageError} error={pageError} />
   if (!user.emailVerified) return <VerificationScreen user={user} onUser={setUser} onSignOut={handleSignOut} onNotice={setPageNotice} onError={setPageError} notice={pageNotice} error={pageError} />
-  if (location.route.name === 'invitation-accept' || location.route.name === 'ownership-accept') return <AcceptancePage route={location.route} search={location.search} onError={setPageError} onNotice={setPageNotice} onAccepted={async () => { await loadWorkspace(); navigate('/overview', true) }} />
   if (workspaceStatus === 'loading') return <CenteredState title="Loading your workspace" message="Your business details and access are being checked with Soho Suite." loading />
   if (workspaceStatus === 'error') return <CenteredState title="We could not open this workspace" message={pageError || 'The backend did not return your workspace.'} actionLabel="Try again" onAction={() => void loadWorkspace()} secondaryLabel="Sign out" onSecondary={handleSignOut} />
-  if (workspaceStatus === 'profile') return <OnboardingCard title="Set up your profile" description="Add the profile details your business workspace uses." error={pageError} notice={pageNotice} onSignOut={() => void handleSignOut()}>
+  if (workspaceStatus === 'profile') return <OnboardingCard title="Set up your profile" description={isAcceptanceRoute ? 'Complete your profile first. Your invitation link or code will be ready to accept afterward.' : 'Add the profile details your business workspace uses.'} error={pageError} notice={pageNotice} onSignOut={() => void handleSignOut()} onSkip={handleSkipProfileSetup}>
     <ProfileForm disabled={busy} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void withBusy(async () => { const created = await createProfile({ username: String(form.get('username')).trim(), firstName: String(form.get('firstName')).trim(), lastName: String(form.get('lastName')).trim(), phone: String(form.get('phone')).trim() || undefined }); setProfile(created); await loadWorkspace() }) }} />
   </OnboardingCard>
-  if (workspaceStatus === 'business') return <OnboardingCard title="Create your business workspace" description="Your business profile and operating data stay in your Soho Suite backend." error={pageError} notice={pageNotice} onSignOut={() => void handleSignOut()}>
-    <BusinessForm disabled={busy} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const name = String(form.get('tradingName')).trim(); void withBusy(async () => { await createBusiness({ company: name, tradingName: name, businessCurrency: String(form.get('businessCurrency')).trim().toUpperCase(), businessType: String(form.get('businessType')), industry: String(form.get('industry')).trim() || undefined, financialYearStartMonth: Number(form.get('financialYearStartMonth')) }); setPageNotice('Business workspace created.'); await loadWorkspace() }) }} />
+  if (isAcceptanceRoute) return <AcceptancePage route={location.route} search={location.search} onError={setPageError} onNotice={setPageNotice} onAccepted={async () => { await loadWorkspace(); navigate('/overview', true) }} />
+  if (workspaceStatus === 'business') return <OnboardingCard title="Create your business workspace" description="Name your business workspace to begin. No invite code or credit card required." error={pageError} notice={pageNotice} onSignOut={() => void handleSignOut()} onSkip={handleSkipBusinessSetup} skipLabel="Skip setup">
+    <BusinessForm disabled={busy} onSkip={handleSkipBusinessSetup} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const name = String(form.get('tradingName')).trim(); void withBusy(async () => { await createBusiness({ company: name, tradingName: name, businessCurrency: String(form.get('businessCurrency')).trim().toUpperCase(), businessType: String(form.get('businessType')), industry: String(form.get('industry')).trim() || undefined, financialYearStartMonth: Number(form.get('financialYearStartMonth')) }); setPageNotice('Business workspace created.'); await loadWorkspace() }) }} />
+    <div className="mt-4 pt-3 border-t border-border/60 text-center text-xs text-muted-foreground">
+      <span>Invited by a teammate? </span>
+      <button className="font-medium text-primary hover:underline cursor-pointer" type="button" onClick={() => navigate('/accept-invitation')}>Join with an invitation code</button>
+    </div>
   </OnboardingCard>
   if (!workspace || !activeBusiness || !profile) return <CenteredState title="Workspace unavailable" message="No business workspace is available for this account." actionLabel="Reload" onAction={() => void loadWorkspace()} secondaryLabel="Sign out" onSecondary={handleSignOut} />
 
   const content = workspaceStatus === 'ready' ? <WorkspaceProvider value={workspace}>
-    <ProductionAppShell profile={profile} businesses={businesses} business={activeBusiness} role={role} onSelectBusiness={selectBusiness} onSignOut={() => void handleSignOut()}>
+    <ProductionAppShell profile={profile} businesses={businesses} business={activeBusiness} role={role} onSelectBusiness={selectBusiness} onCreateWorkspace={handleCreateWorkspace} onSignOut={() => void handleSignOut()}>
       <div className="toast-viewport" aria-label="Notifications">
         {toasts.map((toast) => <Toast key={toast.id} {...toast} onDismiss={dismissToast} />)}
       </div>
@@ -253,19 +301,43 @@ function ProfileForm({ disabled, onSubmit }: { disabled: boolean; onSubmit: (eve
   </form>
 }
 
-function BusinessForm({ disabled, onSubmit }: { disabled: boolean; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+const commonCurrencies = [
+  { code: 'USD', label: 'USD ($) — US Dollar' },
+  { code: 'INR', label: 'INR (₹) — Indian Rupee' },
+  { code: 'EUR', label: 'EUR (€) — Euro' },
+  { code: 'GBP', label: 'GBP (£) — British Pound' },
+  { code: 'CAD', label: 'CAD ($) — Canadian Dollar' },
+  { code: 'AUD', label: 'AUD ($) — Australian Dollar' },
+  { code: 'SGD', label: 'SGD ($) — Singapore Dollar' },
+  { code: 'AED', label: 'AED (د.إ) — UAE Dirham' },
+  { code: 'JPY', label: 'JPY (¥) — Japanese Yen' },
+]
+
+function BusinessForm({ disabled, onSubmit, onSkip }: { disabled: boolean; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onSkip?: () => void }) {
   return <form className="form-grid form-stack" onSubmit={onSubmit}>
-    <label>Business name<input name="tradingName" autoComplete="organization" maxLength={255} required /></label>
-    <label>Currency code<input name="businessCurrency" placeholder="Three-letter ISO code" pattern="[A-Za-z]{3}" maxLength={3} required /></label>
-    <label>Business type<select name="businessType" defaultValue="" required><option value="" disabled>Choose a business type</option><option value="RETAIL">Retail</option><option value="MANUFACTURING">Manufacturing</option><option value="SERVICES">Services</option></select></label>
-    <label>Industry <span className="optional-label">Optional</span><input name="industry" maxLength={255} /></label>
-    <label>Financial year starts in<select name="financialYearStartMonth" defaultValue="" required><option value="" disabled>Choose a month</option>{Array.from({ length: 12 }, (_, index) => <option value={index + 1} key={index}>{new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2025, index, 1))}</option>)}</select></label>
-    <div className="form-actions"><button className="button-primary" disabled={disabled}>Create workspace</button></div>
+    <label>Business name<input name="tradingName" placeholder="e.g. Acme Studio or Kiseki Enterprises" autoComplete="organization" maxLength={255} required autoFocus /></label>
+    <label>Operating currency<select name="businessCurrency" defaultValue="USD" required>{commonCurrencies.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}</select></label>
+    <label>Business type<select name="businessType" defaultValue="SERVICES" required><option value="RETAIL">Retail & E-commerce</option><option value="SERVICES">Services & Agency</option><option value="MANUFACTURING">Manufacturing</option></select></label>
+    <label>Industry <span className="optional-label">Optional</span><input name="industry" placeholder="e.g. Technology, Retail, Design" maxLength={255} /></label>
+    <label>Financial year starts in<select name="financialYearStartMonth" defaultValue="1" required>{Array.from({ length: 12 }, (_, index) => <option value={index + 1} key={index}>{new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2025, index, 1))}</option>)}</select></label>
+    <div className="form-actions flex flex-col gap-2.5 w-full">
+      <button className="button-primary button-wide" disabled={disabled}>{disabled ? 'Creating workspace…' : 'Create workspace & enter app'}</button>
+      {onSkip && (
+        <button
+          type="button"
+          onClick={onSkip}
+          disabled={disabled}
+          className="button-secondary button-wide"
+        >
+          Skip setup & enter default workspace
+        </button>
+      )}
+    </div>
   </form>
 }
 
-function OnboardingCard({ title, description, children, error, notice, onSignOut }: { title: string; description: string; children: ReactNode; error: string; notice: string; onSignOut: () => void }) {
-  return <main className="onboarding-page"><ThemeToggle className="theme-toggle-floating" /><div className="onboarding-brand"><BrandWordmark /></div><section className="onboarding-card"><p className="auth-overline">Your workspace</p><h1>{title}</h1><p className="auth-lede">{description}</p>{error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}{children}<button className="text-action onboarding-signout" type="button" onClick={onSignOut}>Sign out</button></section></main>
+function OnboardingCard({ title, description, children, error, notice, onSignOut, onSkip, skipLabel = 'Skip for now' }: { title: string; description: string; children: ReactNode; error: string; notice: string; onSignOut: () => void; onSkip?: () => void; skipLabel?: string }) {
+  return <main className="onboarding-page"><ThemeToggle className="theme-toggle-floating" /><div className="onboarding-brand"><BrandWordmark /></div><section className="onboarding-card"><div className="flex items-center justify-between mb-1"><p className="auth-overline">Your workspace</p>{onSkip && <button type="button" onClick={onSkip} className="text-xs font-semibold text-primary hover:underline cursor-pointer">{skipLabel} →</button>}</div><h1>{title}</h1><p className="auth-lede">{description}</p>{error && <Message variant="error" text={error} />}{notice && <Message variant="success" text={notice} />}{children}<button className="text-action onboarding-signout" type="button" onClick={onSignOut}>Sign out</button></section></main>
 }
 
 function CenteredState({ title, message, actionLabel, onAction, secondaryLabel, onSecondary, tertiaryLabel, onTertiary, error, notice }: { title: string; message: string; loading?: boolean; actionLabel?: string; onAction?: () => void; secondaryLabel?: string; onSecondary?: () => void; tertiaryLabel?: string; onTertiary?: () => void; error?: string; notice?: string }) {

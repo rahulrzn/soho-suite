@@ -83,7 +83,16 @@ import org.testcontainers.utility.DockerImageName;
         "spring.flyway.password=test_only"
 })
 @Import(BackendApplicationTests.TestIsolationConfiguration.class)
+@org.junit.jupiter.api.condition.EnabledIf("isDockerAvailable")
 class BackendApplicationTests {
+
+    static boolean isDockerAvailable() {
+        try {
+            return org.testcontainers.DockerClientFactory.instance().isDockerAvailable();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
     private static final String ISOLATED_DATABASE_NAME = "sohosuite_isolated_test";
 
