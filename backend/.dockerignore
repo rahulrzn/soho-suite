@@ -1,0 +1,42 @@
+# Maven build and compiler outputs
+target/
+*.class
+
+# Local environment files and secrets (Never bake into Docker image)
+.env
+.env.*
+!pom.xml
+credentials/
+secrets/
+*firebase-adminsdk*.json
+firebase-admin.json
+service-account*.json
+serviceAccountKey.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+
+# Local IDE and development tooling
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+
+# Operating system artifacts and logs
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+*.tmp
+*.swp
+*.swo
+*~
