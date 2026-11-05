@@ -4,16 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Small, consistent feedback for every button in the workspace. */
+/* Keep button feedback subtle; individual variants own their hover treatment. */
 @media (prefers-reduced-motion: no-preference) {
   button:not(:disabled) {
-    transition-property: box-shadow, filter, background-color, border-color, color;
+    transition-property: filter, background-color, border-color, color;
     transition-duration: 160ms;
     transition-timing-function: cubic-bezier(0.2, 0.75, 0.25, 1);
-  }
-
-  button:not(:disabled):hover {
-    box-shadow: 0 2px 8px rgb(8 18 38 / 0.14);
   }
 
   button:not(:disabled):active {
@@ -50,12 +46,8 @@
 /*
  * Soho Suite design system.
  *
- * Color psychology:
- *  - Deep teal (primary)    → trust, calm competence
- *  - Growth green (success) → progress, healthy numbers
- *  - Apricot (accent)       → warmth, approachability, highlights
- *  - Coral (destructive)    → attention without alarm
- *  - Warm paper background  → softer than pure white, less "enterprise"
+ * The existing blue brand anchors the product; purple supports data emphasis,
+ * while green, amber, and coral remain reserved for semantic status.
  *
  * All colors are oklch. Components must only use these semantic tokens.
  * Fonts are loaded via <link> in src/routes/__root.tsx (see HANDOFF.md).
@@ -133,12 +125,12 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.6rem;
 
-  --background: #f3f5fa;
-  --foreground: #1a2030;
+  --background: #f4f6fb;
+  --foreground: #171d2c;
   --surface: #ffffff;
-  --surface-sunken: #f3f5f9;
+  --surface-sunken: #eff2f8;
   --card: #ffffff;
   --card-foreground: #1a2030;
   --popover: #ffffff;
@@ -146,16 +138,16 @@
 
   --primary: #00008A;
   --primary-foreground: #ffffff;
-  --primary-soft: #eaedff;
+  --primary-soft: #e9edff;
 
   --secondary: #edf0f6;
   --secondary-foreground: #30384b;
   --muted: #eef1f6;
-  --muted-foreground: #5d687d;
+  --muted-foreground: #59657c;
 
-  --accent: #0c819e;
+  --accent: #4658c8;
   --accent-foreground: #ffffff;
-  --accent-soft: #e4f4f8;
+  --accent-soft: #e9edff;
 
   --success: #238354;
   --success-foreground: #ffffff;
@@ -169,24 +161,24 @@
   --destructive-foreground: #ffffff;
   --destructive-soft: #fcecec;
 
-  --border: #e0e5ee;
-  --border-strong: #cbd3e0;
-  --input: #c7cfdd;
-  --ring: #5555c7;
+  --border: #dfe4ee;
+  --border-strong: #c8d0df;
+  --input: #c5cede;
+  --ring: #4a5bd0;
 
-  --chart-1: #00008A;
+  --chart-1: #5146c8;
   --chart-2: #c77624;
   --chart-3: #238354;
   --chart-4: #3375b8;
   --chart-5: #bb4f54;
-  --chart-grid: #e3e7ef;
+  --chart-grid: #e4e8f0;
 
-  --sidebar: #f8f9fc;
-  --sidebar-foreground: #20273a;
+  --sidebar: #fbfcff;
+  --sidebar-foreground: #1a2131;
   --sidebar-muted: #68748a;
   --sidebar-primary: #00008a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eaedff;
+  --sidebar-accent: #edf0ff;
   --sidebar-accent-foreground: #171d35;
   --sidebar-border: #e1e6ef;
   --sidebar-ring: #5555c7;
@@ -201,59 +193,59 @@
   --gradient-health: conic-gradient(from 200deg, var(--chart-5), var(--warning), var(--success));
 }
 
-/* Dark tokens are provided for completeness; the prototype is designed light-first. */
+/* Dark and light themes share the same semantic hierarchy and status colors. */
 .dark {
-  --background: #171c25;
-  --foreground: #f3f6fc;
-  --surface: #222b38;
-  --surface-sunken: #1c2430;
-  --card: #222b38;
+  --background: #0a0b10;
+  --foreground: #f1f2f8;
+  --surface: #12131a;
+  --surface-sunken: #191a23;
+  --card: #12131a;
   --card-foreground: #f3f6fc;
-  --popover: #283443;
+  --popover: #1a1b24;
   --popover-foreground: #f3f6fc;
-  --primary: #a9beff;
-  --primary-foreground: #121a2a;
-  --primary-soft: #293754;
-  --secondary: #2b3543;
-  --secondary-foreground: #edf2fa;
-  --muted: #2b3543;
-  --muted-foreground: #d0d9e6;
-  --accent: #7ac9df;
-  --accent-foreground: #10262c;
-  --accent-soft: #223846;
-  --success: #69d197;
+  --primary: #aebcff;
+  --primary-foreground: #101421;
+  --primary-soft: #252a43;
+  --secondary: #20212b;
+  --secondary-foreground: #edf0f8;
+  --muted: #20212b;
+  --muted-foreground: #a4a8b7;
+  --accent: #9870ff;
+  --accent-foreground: #ffffff;
+  --accent-soft: #29213c;
+  --success: #65ca91;
   --success-foreground: #10251a;
-  --success-soft: #203c30;
-  --warning: #e7bd70;
+  --success-soft: #1d382b;
+  --warning: #efc36e;
   --warning-foreground: #2b210f;
-  --warning-soft: #3b3427;
-  --info: #91bdf2;
-  --info-soft: #27394f;
-  --destructive: #f18a8b;
-  --destructive-foreground: #2a1114;
-  --destructive-soft: #442b30;
-  --border: #3c4859;
-  --border-strong: #566479;
-  --input: #48566a;
-  --ring: #a9beff;
-  --chart-1: #a9beff;
-  --chart-2: #e9ad69;
-  --chart-3: #69d197;
-  --chart-4: #7ac9df;
-  --chart-5: #f18a8b;
-  --chart-grid: #364252;
+  --warning-soft: #342d22;
+  --info: #9ab9f4;
+  --info-soft: #202b40;
+  --destructive: #f08c91;
+  --destructive-foreground: #241014;
+  --destructive-soft: #39232a;
+  --border: #252631;
+  --border-strong: #393b49;
+  --input: #424553;
+  --ring: #aebcff;
+  --chart-1: #9870ff;
+  --chart-2: #f0aa25;
+  --chart-3: #65ca91;
+  --chart-4: #6f77f6;
+  --chart-5: #ed5472;
+  --chart-grid: #252631;
 
-  --sidebar: #1b2431;
-  --sidebar-foreground: #eef3fb;
-  --sidebar-muted: #b1bdcf;
-  --sidebar-primary: #a9beff;
-  --sidebar-primary-foreground: #121a2a;
-  --sidebar-accent: #2a3749;
-  --sidebar-accent-foreground: #f3f6fc;
-  --sidebar-border: #354355;
-  --sidebar-ring: #a9beff;
-  --brand-panel: #1a222e;
-  --brand-panel-foreground: #f3f6fc;
+  --sidebar: #090a0f;
+  --sidebar-foreground: #eceef5;
+  --sidebar-muted: #999cab;
+  --sidebar-primary: #8c5cf4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1c1b25;
+  --sidebar-accent-foreground: #f1eff9;
+  --sidebar-border: #1f2029;
+  --sidebar-ring: #9870ff;
+  --brand-panel: #12131a;
+  --brand-panel-foreground: #f1f2f8;
 }
 
 /* Keep the remaining production screens on the same semantic palette. */
@@ -268,7 +260,7 @@
   --color-line-strong: var(--border-strong);
   --color-forest: #00008a;
   --color-forest-hover: #1717a3;
-  --color-teal: #087f9d;
+  --color-teal: var(--accent);
   --color-success: var(--success);
   --color-error: var(--destructive);
   --color-warning: var(--warning);
@@ -276,9 +268,9 @@
 
 .dark {
   --color-faint: #929aaa;
-  --color-forest: #3b478f;
-  --color-forest-hover: #4c59a6;
-  --color-teal: #79c6da;
+  --color-forest: var(--primary);
+  --color-forest-hover: #c2ccff;
+  --color-teal: var(--accent);
   --color-success-soft: var(--success-soft);
   --color-error-soft: var(--destructive-soft);
   --color-warning-soft: var(--warning-soft);
@@ -446,8 +438,8 @@ body {
 
 /* Keep supporting copy readable against the dark slate surfaces. */
 .dark {
-  --color-muted: #d0d9e6;
-  --color-faint: #b8c5d6;
+  --color-muted: #aab2c3;
+  --color-faint: #929bad;
 }
 
 .dark .page-intro > p,
@@ -478,6 +470,43 @@ body {
 .dark .data-table td strong {
   color: var(--foreground);
   font-size: 0.9rem;
+}
+
+/* Legacy data views use the same tokenized table and status treatment. */
+.data-table th {
+  color: var(--muted-foreground);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.data-table td {
+  color: var(--foreground);
+  border-color: var(--border);
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.table-wrap {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.status-tag {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.status-tag.status-warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.status-tag.status-muted {
+  color: var(--muted-foreground);
+  background: var(--muted);
 }
 
 .dark .role-chip,

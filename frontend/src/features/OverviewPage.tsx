@@ -6,7 +6,6 @@ import { listExpenses } from '../api/expenseApi'
 import { exportAnalytics } from '../api/exportApi'
 import type { ActivityEvent, AnalyticsOverview, HealthScore, Metric } from '../api/models'
 import { useWorkspace } from '../app/WorkspaceContext'
-import { RouteLink } from '../app/navigation'
 import { EmptyState, LoadingLine } from '../components/Feedback'
 import { Button } from '../soho/components/button'
 import type { SeriesDef } from '../soho/components/charts'
@@ -15,9 +14,8 @@ import { formatApiError } from '../api/formatError'
 import { saveCsvDownload } from '../utils/download'
 import type { TrendPoint } from '../soho/types'
 import type { PageCallbacks } from './types'
-import { hasAnalyticsSource } from './dashboardReadiness'
 import { buildDashboardPresentation } from './dashboardMockupPresentation'
-import { buildMonthlyPerformance, getDashboardDateRange, getTrailingYearRange, loadAllExpenses, type DashboardPreset } from './dashboardData'
+import { buildDashboardPerformance, getDashboardDateRange, loadAllExpenses, type DashboardPreset } from './dashboardData'
 import { RequestSequence } from './requestSequence'
 
 const DashboardScreen = lazy(() => import('../soho/screens/dashboard-screen').then(({ DashboardScreen: screen }) => ({ default: screen })))
@@ -31,6 +29,7 @@ export function OverviewPage({ onError, onNotice }: PageCallbacks) {
   const [score, setScore] = useState<HealthScore | null>(null)
   const [activity, setActivity] = useState<ActivityEvent[]>([])
   const [performance, setPerformance] = useState<TrendPoint[]>([])
+  const [performanceUnavailableReason, setPerformanceUnavailableReason] = useState<string | null>(null)
   const [expensesAvailable, setExpensesAvailable] = useState(true)
   const [busy, setBusy] = useState(true)
   const [exporting, setExporting] = useState(false)
@@ -44,13 +43,11 @@ export function OverviewPage({ onError, onNotice }: PageCallbacks) {
       return
     }
     setBusy(true)
-    const performanceRange = getTrailingYearRange()
-    const [overviewResult, scoreResult, activityResult, performanceResult, expenseResult] = await Promise.allSettled([
+    const [overviewResult, scoreResult, activityResult, expenseResult] = await Promise.allSettled([
       getAnalyticsOverview(business.id, range.from, range.to),
       getHealthScore(business.id, range.from, range.to),
       getActivity(business.id, 0, 5),
-      getAnalyticsOverview(business.id, performanceRange.from, performanceRange.to),
-      loadAllExpenses((page, size, from, to) => listExpenses(business.id, { from, to, page, size }), performanceRange.from, performanceRange.to),
+      loadAllExpenses((page, size, from, to) => listExpenses(business.id, { from, to, page, size }), range.from, range.to),
     ])
     if (!dataRequests.current.isCurrent(requestId)) return
     const failures: string[] = []
@@ -60,24 +57,25 @@ export function OverviewPage({ onError, onNotice }: PageCallbacks) {
     else { setScore(null); failures.push(errorText(scoreResult.reason)) }
     if (activityResult.status === 'fulfilled') setActivity(activityResult.value.items)
     else { setActivity([]); failures.push(errorText(activityResult.reason)) }
-    if (performanceResult.status === 'fulfilled' && expenseResult.status === 'fulfilled') {
-      const trend = performanceResult.value.dailySalesTrend
-      setPerformance(buildMonthlyPerformance(
-        trend.status === 'AVAILABLE' ? trend.value : null,
-        expenseResult.value,
-        performanceResult.value.currency ?? business.businessCurrency,
-        performanceRange.from,
-        performanceRange.to,
+    if (overviewResult.status === 'fulfilled') {
+      const trend = overviewResult.value.dailySalesTrend
+      const sales = trend.status === 'AVAILABLE' && trend.value?.length ? trend.value : null
+      setPerformance(buildDashboardPerformance(
+        sales,
+        expenseResult.status === 'fulfilled' ? expenseResult.value : [],
+        overviewResult.value.currency ?? business.businessCurrency,
+        range.from,
+        range.to,
       ))
-      setExpensesAvailable(true)
+      setPerformanceUnavailableReason(sales === null
+        ? trend.reason ?? 'No daily sales data is available for this date range.'
+        : null)
     } else {
-      setPerformance(performanceResult.status === 'fulfilled'
-        ? buildMonthlyPerformance(null, expenseResult.status === 'fulfilled' ? expenseResult.value : [], performanceResult.value.currency ?? business.businessCurrency, performanceRange.from, performanceRange.to)
-        : [])
-      setExpensesAvailable(expenseResult.status === 'fulfilled')
-      if (performanceResult.status === 'rejected') failures.push(`Performance trend: ${errorText(performanceResult.reason)}`)
-      if (expenseResult.status === 'rejected') failures.push(`Expenses: ${errorText(expenseResult.reason)}`)
+      setPerformance([])
+      setPerformanceUnavailableReason('Revenue trend could not be loaded for this date range.')
     }
+    setExpensesAvailable(expenseResult.status === 'fulfilled')
+    if (expenseResult.status === 'rejected') failures.push(`Expenses: ${errorText(expenseResult.reason)}`)
     if (failures.length) onError([...new Set(failures)].join(' '))
     setBusy(false)
   }, [business.businessCurrency, business.id, range.from, range.to, onError])
@@ -88,7 +86,6 @@ export function OverviewPage({ onError, onNotice }: PageCallbacks) {
     return () => { requests.next() }
   }, [reloadData])
 
-  const analyticsConfigured = hasAnalyticsSource(analytics)
   const dashboard = buildDashboardPresentation(analytics, score, activity)
   const trendSeries: SeriesDef[] = [
     { key: 'revenue', label: 'Revenue', color: 'var(--chart-1)' },
@@ -129,15 +126,19 @@ export function OverviewPage({ onError, onNotice }: PageCallbacks) {
   }
 
   return <div className="feature-stack">
-    {analyticsConfigured || busy ? <Suspense fallback={<LoadingLine text="Opening dashboard…" />}><DashboardScreen
+    {analytics !== null || busy ? <Suspense fallback={<LoadingLine text="Opening dashboard…" />}><DashboardScreen
       userFirstName={profile.firstName}
       businessName={business.tradingName || business.company}
       dateLabel={formatDateRangeLabel(range.from, range.to)}
+      currencyCode={analytics?.currency ?? business.businessCurrency}
       health={dashboard.health}
       healthUnavailableReason={dashboard.healthUnavailableReason}
       healthFactors={dashboard.healthFactors}
+      dataFreshness={dashboard.dataFreshness}
+      salesAvailability={dashboard.salesAvailability}
       kpis={dashboard.kpis}
       revenueTrend={performance}
+      revenueTrendUnavailableReason={performanceUnavailableReason}
       trendSeries={trendSeries}
       insights={dashboard.insights}
       topCategories={dashboard.topCategories}
@@ -145,9 +146,7 @@ export function OverviewPage({ onError, onNotice }: PageCallbacks) {
       recentActivity={dashboard.recentActivity}
       refreshing={busy}
       rangeControl={<DashboardActions preset={preset} range={customRange} exporting={exporting} onPreset={selectPreset} onOpenCustom={openCustomRange} onRangeChange={setCustomRange} onApplyCustom={applyCustomRange} onExport={() => void handleExport()} />}
-    /></Suspense> : !busy && analytics && <section className="analytics-setup-state">
-      <div className="setup-mark" aria-hidden="true">↗</div><div><p className="section-label">Start with your data</p><h2>Connect a dataset to see your sales picture.</h2><p>Choose a confirmed import and map its date, amount, and order columns. Soho Suite will show only the metrics supported by those rows.</p></div><RouteLink className="button-primary" to="/analytics">Set up analytics</RouteLink>
-    </section>}
+    /></Suspense> : null}
 
     {!busy && !analytics && <section className="content-panel panel-pad"><EmptyState title="Overview could not be loaded" description="The backend did not return sales data. Check the request status and refresh this page." /></section>}
   </div>

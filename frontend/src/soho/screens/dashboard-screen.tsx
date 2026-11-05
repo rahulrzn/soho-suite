@@ -1,4 +1,4 @@
-import { ArrowRight, Lightbulb, PackageX, Sparkles, TrendingUp, TriangleAlert } from "lucide-react";
+import { Activity, ArrowRight, Boxes, Database, FileText, Lightbulb, PackageX, Receipt, Settings2, Sparkles, TrendingUp, TriangleAlert, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
@@ -7,6 +7,7 @@ import { BarList, ChartLegend, Sparkline, TrendChart, type SeriesDef } from "../
 import { HealthGauge } from "../components/health-gauge";
 import { Delta, Meter, PageHeader } from "../components/misc";
 import { Panel, PanelBody, PanelHeader } from "../components/panel";
+import { EmptyState } from "../components/states";
 import { LoadingLine } from "../../components/Feedback";
 import { formatValue } from "../lib/format";
 import { AppLink } from "../router-adapter";
@@ -16,11 +17,15 @@ export interface DashboardScreenProps {
   userFirstName: string;
   businessName: string;
   dateLabel: string;
+  currencyCode?: string | null;
   health: HealthScore | null;
   healthUnavailableReason?: string | null;
   healthFactors?: { label: string; score: number | null; note: string; status: string }[];
+  dataFreshness?: { label: string; score: number | null; note: string; status: string } | null;
+  salesAvailability?: { kind: "available" | "unavailable" | "incomplete" | "no-dataset"; reasons: string[] };
   kpis: Kpi[];
   revenueTrend: TrendPoint[];
+  revenueTrendUnavailableReason?: string | null;
   insights: Insight[];
   topCategories: CategoryValue[];
   stockAlerts: { sku: string; name: string; onHand: number; reorderPoint: number; status: "low" | "out" }[];
@@ -39,13 +44,15 @@ const insightTone = {
 
 export function DashboardScreen(props: DashboardScreenProps) {
   const { health, kpis, revenueTrend, insights, topCategories, stockAlerts, recentActivity } = props;
+  const hasRevenueTrend = revenueTrend.some((point) => point.revenue !== null);
   const history = health?.history ?? [];
   const healthFactors = props.healthFactors ?? health?.factors?.map((factor) => ({ ...factor, status: "AVAILABLE" })) ?? [];
   const trendSeries = props.trendSeries ?? [{ key: "revenue", label: "Sales", color: "var(--chart-1)" }];
   const header = <PageHeader
-    eyebrow={props.dateLabel}
-    title={`Good afternoon, ${props.userFirstName}`}
-    description={`Here's how ${props.businessName} is doing. Scores use confirmed sales and recorded expenses.`}
+    size="compact"
+    eyebrow={props.businessName}
+    title="Dashboard"
+    description={`Good afternoon, ${props.userFirstName}. Here's your business overview.`}
     actions={props.rangeControl}
   />;
 
@@ -54,9 +61,49 @@ export function DashboardScreen(props: DashboardScreenProps) {
       {header}
       {props.refreshing ? <section className="content-panel panel-pad" role="status"><LoadingLine text="Updating dashboard for the selected date range…" /></section> : <>
 
+      {/* Put the real business measures first, before supporting detail. */}
+      <section aria-label="Business performance" className="grid overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 sm:gap-px xl:grid-cols-4">
+        {kpis.map((k, i) => {
+          const metricColor = ["var(--chart-1)", "var(--chart-4)", "var(--chart-2)", "var(--chart-3)"][i % 4];
+          return (
+            <div key={k.id} className="flex min-h-28 items-start justify-between gap-3 bg-surface p-4 sm:min-h-32 sm:p-5">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: metricColor }} />{k.label}</p>
+                <p className="num mt-3 text-2xl font-semibold leading-none tracking-tight text-foreground sm:text-[1.75rem]">{k.value === null ? "—" : formatValue(k.value, k.format, { currency: props.currencyCode ?? undefined })}</p>
+                {(k.delta !== null || k.caption) && <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {k.delta !== null && k.goodWhen && <Delta value={k.delta} goodWhen={k.goodWhen} suffix="vs. previous period" />}
+                  {k.caption && <span className="text-xs leading-relaxed text-muted-foreground">{k.caption}</span>}
+                </div>}
+              </div>
+              {!!k.spark?.length && <Sparkline values={k.spark} width={72} height={32} color={metricColor} />}
+            </div>
+          );
+        })}
+      </section>
+
+      {props.salesAvailability && props.salesAvailability.kind !== "available" && <section role="status" className="flex flex-col gap-3 rounded-lg border border-primary/25 bg-primary-soft/35 px-4 py-3.5 sm:flex-row sm:items-center">
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary"><Database aria-hidden className="size-4.5" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-foreground">
+            {props.salesAvailability.kind === "no-dataset" ? "Sales data isn’t connected" : props.salesAvailability.kind === "incomplete" ? "Some sales insights need more data" : "Sales insights are unavailable"}
+          </h2>
+          <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+            {props.salesAvailability.reasons.length
+              ? [...new Set(props.salesAvailability.reasons)].join(" ")
+              : "Import a sales dataset to calculate revenue, orders, average order value, and customers."}
+          </p>
+        </div>
+        <AppLink to="/datasets" className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          Import sales data <ArrowRight aria-hidden className="size-4" />
+        </AppLink>
+        <AppLink to="/analytics" className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-primary transition-colors hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          Configure analytics
+        </AppLink>
+      </section>}
+
       {/* Hero: Health score + revenue trend */}
       <div className="grid gap-6 xl:grid-cols-12">
-        <Panel className="border-t-2 border-t-success xl:col-span-6 2xl:col-span-5">
+        <Panel className="xl:col-span-5">
           <PanelHeader
             eyebrow="Business health"
             title="Your health score"
@@ -100,48 +147,38 @@ export function DashboardScreen(props: DashboardScreenProps) {
           </PanelBody>
         </Panel>
 
-        <Panel className="flex flex-col border-t-2 border-t-primary xl:col-span-6 2xl:col-span-7">
+        <Panel className="flex flex-col xl:col-span-7">
           <PanelHeader
             eyebrow="Performance"
             title="Revenue vs. expenses"
-            description="Last 12 months"
+            description={props.dateLabel}
             actions={<ChartLegend series={trendSeries} />}
           />
           <PanelBody className="flex-1">
-            <TrendChart
-              data={revenueTrend}
-              series={trendSeries}
-              height={300}
-              ariaLabel="Line chart of monthly revenue versus expenses for the last 12 months"
-            />
+            {hasRevenueTrend ? <TrendChart
+                data={revenueTrend}
+                series={trendSeries}
+                height={300}
+                ariaLabel={`Line chart of revenue versus expenses for ${props.dateLabel}`}
+                currency={props.currencyCode}
+              /> : <EmptyState
+                icon={<TrendingUp />}
+                title="No sales trend for this period"
+                description={props.salesAvailability?.reasons.length ? "See the sales data note above for the reason." : props.revenueTrendUnavailableReason ?? "Connect sales data for this period to show revenue performance."}
+                action={<AppLink to="/datasets" className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-sm font-semibold text-primary hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">Review sales data <ArrowRight aria-hidden className="size-4" /></AppLink>}
+                className="justify-center py-6 sm:min-h-0"
+              />}
           </PanelBody>
         </Panel>
       </div>
 
-      {/* KPI strip — one surface, divided */}
-      <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((k, i) => {
-          const metricColor = ["var(--chart-1)", "var(--chart-4)", "var(--chart-2)", "var(--chart-3)"][i % 4];
-          return (
-          <div key={k.id} className="flex items-start justify-between gap-4 bg-surface p-5">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: metricColor }} />{k.label}</p>
-              <p className="num mt-1.5 text-2xl font-semibold text-foreground">{k.value === null ? "—" : formatValue(k.value, k.format)}</p>
-              {(k.delta !== null || k.caption || k.reason) && <div className="mt-2 flex flex-wrap items-center gap-2">
-                {k.delta !== null && k.goodWhen && <Delta value={k.delta} goodWhen={k.goodWhen} suffix="vs. previous period" />}
-                {k.caption && <span className="text-xs text-muted-foreground">{k.caption}</span>}
-                {k.reason && <span className="text-xs text-muted-foreground">{k.reason}</span>}
-              </div>}
-            </div>
-            {!!k.spark?.length && <Sparkline
-              values={k.spark}
-              width={88}
-              height={36}
-              color={metricColor}
-            />}
-          </div>
-        )})}
-      </div>
+      {props.dataFreshness && <section aria-label="Data freshness" className="flex items-start gap-3 border-y border-border py-4">
+        <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-muted-foreground"><Activity aria-hidden className="size-4" /></span>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Data freshness</h2>
+          <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{props.dataFreshness.note || "Import timing details are not available."}</p>
+        </div>
+      </section>}
 
       {(insights.length > 0 || topCategories.length > 0 || stockAlerts.length > 0) && <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-12">
         {insights.length > 0 && <Panel className="xl:col-span-5">
@@ -236,19 +273,31 @@ export function DashboardScreen(props: DashboardScreenProps) {
             </AppLink>
           }
         />
-        <ul className="grid gap-px border-t border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
+        {recentActivity.length > 0 ? <ul className="divide-y divide-border border-t border-border">
           {recentActivity.slice(0, 4).map((a) => (
-            <li key={a.id} className="bg-surface px-5 py-4">
-              {a.day && a.time && <p className="text-xs text-muted-foreground">{a.day} · {a.time}</p>}
-              <p className="mt-1 text-sm text-foreground">{a.summary ?? <><span className="font-medium">{a.actor}</span> {a.action} <span className="font-medium">{a.target}</span></>}</p>
-              {a.detail && <p className="mt-1 text-xs text-muted-foreground">{a.detail}</p>}
+            <li key={a.id} className="flex items-start gap-3 px-5 py-3.5">
+              <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-muted-foreground">{activityIcon(a.module)}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm leading-relaxed text-foreground">{a.summary ?? <><span className="font-medium">{a.actor}</span> {a.action} <span className="font-medium">{a.target}</span></>}</p>
+                {a.detail && <p className="mt-0.5 text-xs capitalize text-muted-foreground">{a.module}</p>}
+              </div>
+              {a.day && a.time && <time className="shrink-0 pt-0.5 text-xs text-muted-foreground sm:text-sm">{a.day} · {a.time}</time>}
             </li>
           ))}
-        </ul>
+        </ul> : <p className="border-t border-border px-5 py-4 text-sm text-muted-foreground">No recent activity in this workspace yet.</p>}
       </Panel>
       </>}
     </div>
   );
+}
+
+function activityIcon(module: DashboardActivityEvent["module"]) {
+  const Icon = module === "Datasets" ? Database
+    : module === "Expenses" ? Receipt
+      : module === "Inventory" ? Boxes
+        : module === "Reports" ? FileText
+          : module === "Team" ? Users : Settings2;
+  return <Icon aria-hidden className="size-4" />;
 }
 
 function HealthFactorList({ factors, className = "mt-4 space-y-3" }: { factors: { label: string; score: number | null; note: string; status: string }[]; className?: string }) {

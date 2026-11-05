@@ -40,17 +40,45 @@ export function AppShell({ children, user, businessName, businesses = [], busine
   const [profileOpen, setProfileOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileDrawerRef = useRef<HTMLElement>(null);
   const profileMenuId = useId();
   const path = useCurrentPath();
   const currentPage = navGroups.flatMap((group) => group.items).find((item) => isActivePath(path, item.to));
-  const currentGroup = navGroups.find((group) => group.items.some((item) => isActivePath(path, item.to)));
-  const CurrentPageIcon = currentPage?.icon;
 
   useEffect(() => {
     setMobileOpen(false);
     setProfileOpen(false);
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [path]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const drawer = mobileDrawerRef.current;
+    const focusable = () => drawer?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") ?? [];
+    focusable()[0]?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        mobileTriggerRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -75,7 +103,7 @@ export function AppShell({ children, user, businessName, businesses = [], busine
     const isCollapsed = collapsed && !isMobile;
     return (
       <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-        <div className={cn("flex h-[4.5rem] items-center gap-2 border-b border-sidebar-border/70 px-5", isCollapsed && "justify-center px-0")}>
+        <div className={cn("flex h-14 items-center gap-2 border-b border-sidebar-border/70 px-5", isCollapsed && "justify-center px-0")}>
           <AppLink to="/" aria-label="Soho Suite home" className="rounded-lg">
             <Logo collapsed={isCollapsed} />
           </AppLink>
@@ -104,7 +132,7 @@ export function AppShell({ children, user, businessName, businesses = [], busine
           {navGroups.map((group) => (
             <div key={group.label} className="mt-5 first:mt-2">
               {!isCollapsed ? (
-                <p className="mb-1.5 px-2.5 text-xs font-medium text-sidebar-muted">
+                <p className="mb-1.5 px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.09em] text-sidebar-muted">
                   {group.label}
                 </p>
               ) : (
@@ -124,14 +152,14 @@ export function AppShell({ children, user, businessName, businesses = [], busine
                           "group relative flex min-h-10 items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
                           isCollapsed && "justify-center px-0",
                           active
-                            ? "bg-sidebar-accent/90 text-sidebar-accent-foreground"
+                            ? "bg-sidebar-accent/90 text-sidebar-accent-foreground dark:bg-sidebar-primary dark:text-sidebar-primary-foreground"
                             : "text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                         )}
                       >
                         {active && (
-                          <span aria-hidden className="absolute top-1.5 bottom-1.5 left-0 w-0.75 rounded-full bg-sidebar-primary" />
+                          <span aria-hidden className="absolute top-1.5 bottom-1.5 left-0 w-0.75 rounded-full bg-sidebar-primary dark:hidden" />
                         )}
-                        <Icon className={cn("size-4.5 shrink-0", active && "text-sidebar-primary")} />
+                        <Icon className={cn("size-4.5 shrink-0", active && "text-sidebar-primary dark:text-sidebar-primary-foreground")} />
                         {!isCollapsed && <span className="flex-1">{item.label}</span>}
                       </AppLink>
                     </li>
@@ -189,16 +217,17 @@ export function AppShell({ children, user, businessName, businesses = [], busine
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-foreground/40 animate-in fade-in" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-pop animate-in slide-in-from-left duration-200">
+          <button type="button" aria-label="Close navigation" className="absolute inset-0 h-full w-full cursor-default bg-foreground/40 animate-in fade-in" onClick={() => { setMobileOpen(false); mobileTriggerRef.current?.focus(); }} />
+          <aside ref={mobileDrawerRef} role="dialog" aria-modal="true" aria-label="Main navigation" tabIndex={-1} className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-pop animate-in slide-in-from-left duration-200">
             {sidebar(true)}
           </aside>
         </div>
       )}
 
       <div className={cn("min-w-0 transition-[padding] duration-200", collapsed ? "lg:pl-18" : "lg:pl-68")}>
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-surface px-4 md:px-7">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-surface px-4 md:px-7">
           <Button
+            ref={mobileTriggerRef}
             variant="ghost"
             size="icon"
             className="lg:hidden"
@@ -216,10 +245,7 @@ export function AppShell({ children, user, businessName, businesses = [], busine
           >
             {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
           </Button>
-          <div aria-label="Current page" className="flex min-w-0 items-center gap-2.5">
-            {CurrentPageIcon && <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary-soft text-primary"><CurrentPageIcon aria-hidden className="size-4" /></span>}
-            <span className="hidden text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:inline">{currentGroup?.label ?? "Workspace"}</span>
-            <span aria-hidden="true" className="hidden h-5 w-px bg-border-strong sm:block" />
+          <div aria-label="Current page" className="flex min-w-0 items-center">
             <span className="truncate text-sm font-semibold text-foreground">{currentPage?.label ?? "Workspace"}</span>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2.5">
@@ -266,7 +292,7 @@ export function AppShell({ children, user, businessName, businesses = [], busine
           </div>
         </header>
 
-        <main id="main" className="mx-auto w-full min-w-0 max-w-[1480px] px-4 py-6 sm:px-6 md:py-8 lg:px-10 lg:py-10">
+        <main id="main" className="mx-auto w-full min-w-0 max-w-[1480px] px-4 py-5 sm:px-6 md:py-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>

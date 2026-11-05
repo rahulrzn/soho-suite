@@ -59,6 +59,70 @@ export function buildMonthlyPerformance(
   return months.map(({ point }) => point)
 }
 
+/** Build a chart over exactly the selected range, choosing buckets that stay legible. */
+export function buildDashboardPerformance(
+  sales: SalesTrendPoint[] | null,
+  expenses: Expense[],
+  currency: string | null,
+  from: string,
+  to: string,
+): TrendPoint[] {
+  const start = parseDate(from)
+  const end = parseDate(to)
+  if (!start || !end || start > end) return []
+
+  const dayCount = Math.round((Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000) + 1
+  const granularity = dayCount <= 31 ? 'day' : dayCount <= 120 ? 'week' : 'month'
+  const bucketDates: Date[] = []
+  if (granularity === 'month') {
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+    const last = new Date(end.getFullYear(), end.getMonth(), 1)
+    while (cursor <= last) {
+      bucketDates.push(new Date(cursor))
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+  } else {
+    const bucketSize = granularity === 'day' ? 1 : 7
+    for (let offset = 0; offset < dayCount; offset += bucketSize) {
+      const date = new Date(start)
+      date.setDate(date.getDate() + offset)
+      bucketDates.push(date)
+    }
+  }
+
+  const points = bucketDates.map((date, index) => {
+    const bucketEnd = new Date(date)
+    bucketEnd.setDate(bucketEnd.getDate() + (granularity === 'day' ? 0 : granularity === 'week' ? 6 : daysInMonth(date) - 1))
+    return {
+      key: granularity === 'month' ? monthKey(date) : String(index),
+      start: date,
+      end: bucketEnd > end ? end : bucketEnd,
+      point: {
+      label: granularity === 'month'
+        ? new Intl.DateTimeFormat('en', { month: 'short', ...(start.getFullYear() !== end.getFullYear() ? { year: '2-digit' } : {}) }).format(date)
+        : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(date),
+      revenue: sales ? 0 : null,
+      expenses: 0,
+      } as TrendPoint,
+    }
+  })
+
+  for (const item of sales ?? []) {
+    const date = parseDate(item.date)
+    if (!date || date < start || date > end) continue
+    const bucket = points.find((candidate) => date >= candidate.start && date <= candidate.end)
+    if (bucket && typeof bucket.point.revenue === 'number') bucket.point.revenue += item.salesAmount
+  }
+  for (const expense of expenses) {
+    if (!currency || expense.currency !== currency) continue
+    const date = parseDate(expense.expenseDate)
+    if (!date || date < start || date > end) continue
+    const bucket = points.find((candidate) => date >= candidate.start && date <= candidate.end)
+    if (bucket && typeof bucket.point.expenses === 'number') bucket.point.expenses += expense.amount
+  }
+  return points.map(({ point }) => point)
+}
+
 export async function loadAllExpenses(
   loadPage: (page: number, size: number, from: string, to: string) => Promise<Page<Expense>>,
   from: string,
@@ -85,4 +149,8 @@ function parseDate(value: string) {
 
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function daysInMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
 }

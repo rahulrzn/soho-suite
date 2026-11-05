@@ -26,7 +26,7 @@ export function PanelHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("flex flex-wrap items-start justify-between gap-3 rounded-t-xl border-b border-border bg-surface-sunken/45 px-5 py-4 md:px-6 md:py-5", className)}>
+    <header className={cn("flex flex-wrap items-start justify-between gap-3 rounded-t-xl border-b border-border/80 px-5 py-4 md:px-6", className)}>
       <div className="min-w-0">
         {eyebrow && <p className="mb-1 text-xs font-semibold text-primary">{eyebrow}</p>}
         <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>

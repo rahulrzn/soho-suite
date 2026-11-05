@@ -37,8 +37,8 @@ export interface SeriesDef {
 
 type ValueKind = "currency" | "number";
 
-function fmt(v: number, kind: ValueKind, compact = false) {
-  return kind === "currency" ? formatCurrency(v, { compact }) : formatNumber(v, { compact });
+function fmt(v: number, kind: ValueKind, compact = false, currency?: string | null) {
+  return kind === "currency" ? formatCurrency(v, { compact, currency: currency ?? undefined }) : formatNumber(v, { compact });
 }
 
 function ChartTooltip({
@@ -47,7 +47,8 @@ function ChartTooltip({
   label,
   series,
   valueKind,
-}: TooltipProps<number, string> & { series: SeriesDef[]; valueKind: ValueKind }) {
+  currency,
+}: TooltipProps<number, string> & { series: SeriesDef[]; valueKind: ValueKind; currency?: string | null }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="min-w-40 rounded-xl border border-border bg-popover px-3 py-2.5 text-xs shadow-pop">
@@ -61,7 +62,7 @@ function ChartTooltip({
                 <span className="size-2 rounded-full" style={{ background: s?.color }} />
                 {s?.label}
               </span>
-              <span className="num font-medium text-foreground">{fmt(Number(p.value), valueKind)}</span>
+              <span className="num font-medium text-foreground">{fmt(Number(p.value), valueKind, false, currency)}</span>
             </div>
           );
         })}
@@ -93,12 +94,14 @@ export function TrendChart({
   height = 260,
   valueKind = "currency",
   ariaLabel,
+  currency,
 }: {
   data: TrendPoint[];
   series: SeriesDef[];
   height?: number;
   valueKind?: ValueKind;
   ariaLabel: string;
+  currency?: string | null;
 }) {
   const gid = useId().replace(/:/g, "");
   return (
@@ -126,11 +129,11 @@ export function TrendChart({
             axisLine={false}
             width={48}
             tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-            tickFormatter={(v: number) => fmt(v, valueKind, true)}
+            tickFormatter={(v: number) => fmt(v, valueKind, true, currency)}
           />
           <Tooltip
             cursor={{ stroke: "var(--border-strong)", strokeDasharray: "3 3" }}
-            content={<ChartTooltip series={series} valueKind={valueKind} />}
+            content={<ChartTooltip series={series} valueKind={valueKind} currency={currency} />}
           />
           {series.map((s) =>
             s.kind === "line" ? (

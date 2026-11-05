@@ -216,17 +216,19 @@ export function PageHeader({
   title,
   description,
   actions,
+  size = "default",
 }: {
   eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  size?: "default" | "compact";
 }) {
   return (
-    <div className="flex flex-col gap-5 border-b border-border pb-5 md:flex-row md:items-end md:justify-between md:pb-6">
+    <div className={cn("flex flex-col gap-5 border-b border-border pb-5 md:flex-row md:items-end md:justify-between md:pb-6", size === "compact" && "gap-3 pb-4 md:pb-5")}>
       <div className="min-w-0">
         {eyebrow && <p className="mb-1 text-sm font-medium text-primary">{eyebrow}</p>}
-        <h1 className="text-[1.8rem] font-semibold tracking-[-0.045em] text-foreground md:text-[2rem]">{title}</h1>
+        <h1 className={cn("font-semibold tracking-[-0.045em] text-foreground", size === "compact" ? "text-2xl" : "text-[1.8rem] md:text-[2rem]")}>{title}</h1>
         {description && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">{actions}</div>}

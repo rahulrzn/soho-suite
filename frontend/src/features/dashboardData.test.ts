@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Expense, Page, SalesTrendPoint } from '../api/models'
-import { buildMonthlyPerformance, getDashboardDateRange, getTrailingYearRange, loadAllExpenses } from './dashboardData'
+import { buildDashboardPerformance, buildMonthlyPerformance, getDashboardDateRange, getTrailingYearRange, loadAllExpenses } from './dashboardData'
 
 const today = new Date(2026, 10, 4, 12)
 
@@ -41,6 +41,33 @@ describe('buildMonthlyPerformance', () => {
   it('does not turn incomplete sales data into zero revenue', () => {
     expect(buildMonthlyPerformance(null, [expense(1, '2026-01-04', 40)], 'INR', '2026-01-01', '2026-01-31'))
       .toEqual([{ label: 'Jan', revenue: null, expenses: 40 }])
+  })
+})
+
+describe('buildDashboardPerformance', () => {
+  it('uses daily buckets for a short selected range and keeps missing sales unavailable', () => {
+    expect(buildDashboardPerformance(
+      [{ date: '2026-11-01', salesAmount: 0 }, { date: '2026-11-03', salesAmount: 30 }],
+      [expense(1, '2026-11-03', 12)], 'INR', '2026-11-01', '2026-11-04',
+    )).toEqual([
+      { label: 'Nov 1', revenue: 0, expenses: 0 },
+      { label: 'Nov 2', revenue: 0, expenses: 0 },
+      { label: 'Nov 3', revenue: 30, expenses: 12 },
+      { label: 'Nov 4', revenue: 0, expenses: 0 },
+    ])
+    expect(buildDashboardPerformance(null, [], 'INR', '2026-11-01', '2026-11-02'))
+      .toEqual([{ label: 'Nov 1', revenue: null, expenses: 0 }, { label: 'Nov 2', revenue: null, expenses: 0 }])
+  })
+
+  it('uses weekly buckets for a quarter and monthly buckets for a longer range', () => {
+    expect(buildDashboardPerformance(
+      [{ date: '2026-10-02', salesAmount: 10 }, { date: '2026-10-10', salesAmount: 20 }],
+      [], 'INR', '2026-10-01', '2026-11-05',
+    ).map((point) => point.revenue)).toEqual([10, 20, 0, 0, 0, 0])
+    expect(buildDashboardPerformance(
+      [{ date: '2026-01-10', salesAmount: 50 }, { date: '2026-02-10', salesAmount: 20 }],
+      [], 'INR', '2026-01-01', '2026-06-01',
+    ).map((point) => point.revenue)).toEqual([50, 20, 0, 0, 0, 0])
   })
 })
 

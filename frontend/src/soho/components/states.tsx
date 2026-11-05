@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 import { cn } from "../../lib/utils";
@@ -89,13 +89,45 @@ export function Drawer({
   footer?: ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => { onCloseRef.current = onClose }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    panelRef.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    const focusable = () => panel?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") ?? [];
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = focusable();
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    (focusable()[0] ?? panel)?.focus();
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
+  }, [open]);
 
   if (!open) return null;
   return (
@@ -105,13 +137,15 @@ export function Drawer({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === "string" ? title : undefined}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
         className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-pop animate-in slide-in-from-right duration-300"
       >
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
-            <h2 className="text-lg font-semibold">{title}</h2>
-            {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+            <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
+            {description && <p id={descriptionId} className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
           </div>
           <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
             <X />

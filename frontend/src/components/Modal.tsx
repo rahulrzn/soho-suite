@@ -1,8 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
 
 export function Modal({ title, description, children, onClose }: { title: string; description?: string; children: ReactNode; onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  const titleId = useId()
+  const descriptionId = useId()
+
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const previousBodyOverflow = document.body.style.overflow
@@ -12,7 +18,7 @@ export function Modal({ title, description, children, onClose }: { title: string
     const firstControl = dialogRef.current?.querySelector<HTMLElement>('button, input, select, textarea, [href]')
     firstControl?.focus()
     function keydown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') onCloseRef.current()
       if (event.key !== 'Tab' || !dialogRef.current) return
       const controls = [...dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href]')]
       if (!controls.length) return
@@ -26,10 +32,10 @@ export function Modal({ title, description, children, onClose }: { title: string
       document.documentElement.style.overflow = previousRootOverflow
       previous?.focus()
     }
-  }, [onClose])
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby={description ? 'modal-description' : undefined} ref={dialogRef}>
-      <div className="modal-heading"><div><h2 id="modal-title">{title}</h2>{description && <p id="modal-description">{description}</p>}</div><button type="button" className="modal-close" aria-label="Close dialog" onClick={onClose}>×</button></div>
+  }, [])
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onCloseRef.current() }}>
+    <div className="modal-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined} ref={dialogRef}>
+      <div className="modal-heading"><div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div><button type="button" className="modal-close" aria-label="Close dialog" onClick={() => onCloseRef.current()}>×</button></div>
       {children}
     </div>
   </div>
